@@ -37,7 +37,7 @@ const toastAndOk = (message: string, data: any = {}) => {
   return ok(data)
 }
 
-const buildSolrFilter = (query: any): string => {
+const buildFilters = (query: any): string[] => {
   const filters = ['docType: ORDER', 'orderTypeId: PURCHASE_ORDER']
 
   if (query.productStoreId) filters.push(`productStoreId: ${query.productStoreId}`)
@@ -56,7 +56,7 @@ const buildSolrFilter = (query: any): string => {
     filters.push(`estimatedDeliveryDate:[* TO ${query.estimatedDeliveryDateTo}T23:59:59Z]`)
   }
 
-  return filters.join(' AND ')
+  return filters
 }
 
 const mapSolrDoc = (doc: any): any => ({
@@ -82,24 +82,36 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     if (pageIndex === 0) emitter.emit('presentLoader')
     commit(types.PURCHASE_ORDER_LOADING_UPDATED, { loading: true })
     try {
-      const solrPayload = {
-        json: {
-          params: {
-            rows: limit,
-            start: pageIndex * limit,
-            sort: 'estimatedDeliveryDate asc'
-          },
-          filter: buildSolrFilter(query),
-          query: query.keyword ? `keywordSearchText:(${query.keyword})` : '*:*'
-        }
+      const groupByField = ({
+        ORDER_ITEM: 'orderId',
+        ORDER_PARENT_PRODUCT: 'orderIdParentProductId',
+        PRODUCT: 'productId',
+        PRODUCT_ARRIVAL: 'productIdETA',
+        PARENT_PRODUCT: 'parentProductId',
+        PARENT_PRODUCT_ARRIVAL: 'parentProductIdETA'
+      } as any)[query.groupBy] || 'orderId'
+
+      const searchPayload = {
+        viewSize: limit,
+        viewIndex: pageIndex,
+        groupByField,
+        groupLimit: 200,
+        queryString: query.keyword || '',
+        queryFields: 'orderId orderName productId productName internalName parentProductId parentProductName search_orderIdentifications',
+        sort: 'estimatedDeliveryDate asc',
+        filters: buildFilters(query)
       }
 
-      const resp = await PurchaseOrderService.fetchPurchaseOrders(solrPayload)
+      const resp = await PurchaseOrderService.fetchPurchaseOrders(searchPayload)
       if (hasError(resp)) throw resp.data
 
-      const docs: any[] = resp.data?.response?.docs || []
-      const total: number = resp.data?.response?.numFound || 0
-      const items = docs.map(mapSolrDoc)
+      const grouped = resp.data?.grouped?.[groupByField]
+      const groups: any[] = grouped?.groups || []
+      const total: number = grouped?.matches || 0
+
+      const items = groups.flatMap((group: any) =>
+        (group.doclist?.docs || []).map(mapSolrDoc)
+      )
 
       const productIds = [...new Set(items.flatMap((item: any) =>
         [item.productId, item.parentProductId].filter(Boolean)
@@ -131,6 +143,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
         productId: '',
         estimatedDeliveryDateFrom: '',
         estimatedDeliveryDateTo: '',
+        groupBy: 'ORDER_ITEM',
         pageIndex: 0,
         limit: process.env.VUE_APP_VIEW_SIZE ? parseInt(process.env.VUE_APP_VIEW_SIZE) : 20,
         hasUpdated: false

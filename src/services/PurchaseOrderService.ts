@@ -2,7 +2,7 @@ import { api } from '@/adapter';
 
 const fetchPurchaseOrders = async (payload: any): Promise<any> => {
   return api({
-    url: 'solr-query',
+    url: 'searchOrders',
     method: 'POST',
     data: payload
   });

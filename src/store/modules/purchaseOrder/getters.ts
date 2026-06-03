@@ -46,7 +46,7 @@ const getters: GetterTree<PurchaseOrderState, RootState> = {
     return state.selectedAllocations
   },
   isScrollable (state) {
-    return state.list.items.length > 0 && state.list.items.length < state.list.total
+    return !state.loading && state.list.items.length > 0 && state.list.items.length < state.list.total
   },
   isLoading (state) {
     return state.loading

@@ -20,7 +20,7 @@
       </ion-toolbar>
     </ion-header>
 
-    <ion-content ref="contentRef" :scroll-events="true">
+    <ion-content ref="contentRef" :scroll-events="true" @ionScroll="enableScrolling()">
       <ion-refresher slot="fixed" @ionRefresh="refresh($event)">
         <ion-refresher-content></ion-refresher-content>
       </ion-refresher>
@@ -316,7 +316,7 @@
         </ion-accordion-group>
       </main>
 
-      <ion-infinite-scroll @ionInfinite="loadMore($event)" threshold="100px" v-show="isScrollable">
+      <ion-infinite-scroll @ionInfinite="loadMore($event)" id="infinite-scroll" threshold="100px" v-show="isScrollable" ref="infiniteScrollRef">
         <ion-infinite-scroll-content loading-spinner="crescent" :loading-text="$t('Loading')"></ion-infinite-scroll-content>
       </ion-infinite-scroll>
     </ion-content>
@@ -411,6 +411,7 @@ export default defineComponent({
         estimatedDeliveryDateFrom: '',
         estimatedDeliveryDateTo: ''
       },
+      isScrollingEnabled: false,
       showFilters: false,
       sortDirection: 'asc'
     }
@@ -461,6 +462,9 @@ export default defineComponent({
     }
   },
   watch: {
+    groupBy() {
+      this.search(0);
+    },
     groupedOrders: {
       handler(groups: any[]) {
         this.expandedGroups = groups.map((group: any) => group.groupKey);
@@ -469,6 +473,7 @@ export default defineComponent({
     }
   },
   ionViewWillEnter() {
+    this.isScrollingEnabled = false
     this.localQuery = {
       keyword: this.query.keyword,
       orderStatusId: [...this.query.orderStatusId],
@@ -484,6 +489,7 @@ export default defineComponent({
         query: {
           ...this.localQuery,
           productStoreId: this.currentEComStore?.productStoreId || '',
+          groupBy: this.groupBy,
           pageIndex
         }
       });
@@ -492,10 +498,40 @@ export default defineComponent({
       await this.search(0);
       event.target.complete();
     },
+    enableScrolling() {
+      const parentElement = (this as any).$refs.contentRef.$el
+      const scrollEl = parentElement.shadowRoot.querySelector("div[part='scroll']")
+      if (!scrollEl) {
+        console.error('[enableScrolling] scrollEl not found — shadow DOM selector may be wrong')
+        return
+      }
+      const scrollHeight = scrollEl.scrollHeight
+      const infiniteHeight = (this as any).$refs.infiniteScrollRef.$el.offsetHeight
+      const scrollTop = scrollEl.scrollTop
+      const threshold = 100
+      const height = scrollEl.offsetHeight
+      const distanceFromInfinite = scrollHeight - infiniteHeight - scrollTop - threshold - height
+      this.isScrollingEnabled = distanceFromInfinite >= 0
+    },
     async loadMore(event: any) {
-      const nextIndex = Math.ceil(this.orders.length / this.query.limit);
-      await this.search(nextIndex);
-      event.target.complete();
+      if (!(this.isScrollingEnabled && this.isScrollable)) {
+        await event.target.complete()
+        return
+      }
+      const parentElement = (this as any).$refs.contentRef.$el
+      const scrollEl = parentElement.shadowRoot.querySelector("div[part='scroll']")
+      const scrollTopBefore = scrollEl?.scrollTop || 0
+
+      await this.store.dispatch('purchaseOrder/updateQuery', {
+        query: {
+          ...this.localQuery,
+          productStoreId: this.currentEComStore?.productStoreId || '',
+          groupBy: this.groupBy,
+          pageIndex: this.query.pageIndex + 1
+        }
+      })
+      await (this as any).$refs.contentRef.$el.scrollToPoint(0, scrollTopBefore, 0)
+      event.target.complete()
     },
     clearFilters() {
       this.localQuery = {

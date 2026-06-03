@@ -21,6 +21,7 @@ const purchaseOrderModule: Module<PurchaseOrderState, RootState> = {
       productId: '',
       estimatedDeliveryDateFrom: '',
       estimatedDeliveryDateTo: '',
+      groupBy: 'ORDER_ITEM',
       pageIndex: 0,
       limit: process.env.VUE_APP_VIEW_SIZE ? parseInt(process.env.VUE_APP_VIEW_SIZE) : 20,
       hasUpdated: false

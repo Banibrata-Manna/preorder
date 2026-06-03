@@ -12,6 +12,7 @@ export default interface PurchaseOrderState {
     productId: string;
     estimatedDeliveryDateFrom: string;
     estimatedDeliveryDateTo: string;
+    groupBy: string;
     pageIndex: number;
     limit: number;
     hasUpdated: boolean;
