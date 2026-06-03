@@ -38,6 +38,13 @@ const getters: GetterTree <UserState, RootState> = {
     },
     getCurrentOrderParking(state) {
         return state.currentOrderParking
+    },
+    getMaargeInstanceUrl(state) {
+        return state.maargeInstanceUrl;
+    },
+    getMaargeBaseUrl(state) {
+        const maargeInstanceUrl = state.maargeInstanceUrl;
+        return maargeInstanceUrl.startsWith('http') ? maargeInstanceUrl.includes('/rest/s1') ? maargeInstanceUrl : `${maargeInstanceUrl}/rest/s1` : `https://${maargeInstanceUrl}.hotwax.io/rest/s1`;
     }
 }
 export default getters;

@@ -4,6 +4,7 @@ export default interface UserState {
     permissions: any;
     pwaState: any;
     instanceUrl: string;
+    maargeInstanceUrl: string;
     currentEComStore: object;
     virtualFacilities: object | null;
     currentOrderParking: Array<string>;

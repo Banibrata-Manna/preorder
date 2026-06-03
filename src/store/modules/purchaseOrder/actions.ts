@@ -155,8 +155,70 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
   async fetchPurchaseOrder ({ commit }, { orderId }) {
     emitter.emit('presentLoader')
     try {
-      syncCurrent(commit, orderId)
-      return ok({ order: clone(findOrder(orderId)) })
+      const orderResp = await PurchaseOrderService.fetchPurchaseOrder(orderId)
+      if (hasError(orderResp)) throw orderResp.data
+
+      const orderData = orderResp.data.order
+      const rawItems: any[] = orderData.items || []
+
+      const [receiptsResult, facilityResult] = await Promise.allSettled([
+        PurchaseOrderService.fetchPurchaseOrderReceipts(orderId),
+        orderData.originFacilityId
+          ? PurchaseOrderService.fetchFacilityContactMechs({
+              facilityId: orderData.originFacilityId,
+              contactMechTypeId: 'POSTAL_ADDRESS',
+              contactMechPurposeTypeId: 'PRIMARY_LOCATION'
+            })
+          : Promise.resolve(null)
+      ])
+
+      const receivedByItem: Record<string, number> = {}
+      if (receiptsResult.status === 'fulfilled' && !hasError(receiptsResult.value)) {
+        const receipts: any[] = receiptsResult.value?.data?.PurchaseOrderItemShipmentReceiptList || []
+        receipts.forEach((r: any) => {
+          receivedByItem[r.orderItemSeqId] = (receivedByItem[r.orderItemSeqId] || 0) + Number(r.quantityAccepted || 0)
+        })
+      }
+
+      const facilityData = facilityResult.status === 'fulfilled' && facilityResult.value
+        ? (facilityResult.value.data?.facilityContactMechs?.[0] || {})
+        : {}
+
+      const items = rawItems.map((item: any) => ({
+        ...item,
+        internalName: item.internalName || item.itemDescription,
+        itemStatusId: item.statusId,
+        receivedQuantity: receivedByItem[item.orderItemSeqId] || 0
+      }))
+
+      const order = {
+        ...orderData,
+        preOrderCount: rawItems.filter((i: any) => i.isNewProduct === 'Y').length,
+        backOrderCount: rawItems.filter((i: any) => i.isNewProduct === 'N').length,
+        allocationCount: 0,
+        items,
+        shipGroups: [{
+          shipGroupSeqId: '00001',
+          facilityId: orderData.originFacilityId,
+          facilityName: facilityData.facilityName || orderData.originFacilityId,
+          address1: facilityData.address1,
+          address2: facilityData.address2,
+          city: facilityData.city,
+          stateProvinceGeoId: facilityData.stateProvinceGeoId,
+          postalCode: facilityData.postalCode,
+          countryGeoId: facilityData.countryGeoId
+        }]
+      }
+
+      commit(types.PURCHASE_ORDER_CURRENT_UPDATED, { order })
+
+      const productIds = [...new Set(items.map((i: any) => i.productId).filter(Boolean))]
+      if (productIds.length) this.dispatch('product/fetchProducts', { productIds })
+
+      return { order }
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
     } finally {
       emitter.emit('dismissLoader')
     }

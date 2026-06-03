@@ -36,5 +36,8 @@ const mutations: MutationTree <UserState> = {
         state.pwaState.registration = payload.registration;
         state.pwaState.updateExists = payload.updateExists;
     },
+    [types.USER_MAARGE_INSTANCE_URL_UPDATED] (state, payload) {
+        state.maargeInstanceUrl = payload;
+    }
 }
 export default mutations;

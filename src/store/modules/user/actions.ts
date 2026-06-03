@@ -20,8 +20,9 @@ const actions: ActionTree<UserState, RootState> = {
  */
   async login ({ commit, dispatch }, payload) {
 
-    const { token, oms } = payload;
+    const { token, oms, omsRedirectionUrl } = payload;
     dispatch("setUserInstanceUrl", oms);
+    dispatch("setMaargeInstanceUrl", omsRedirectionUrl);
     try {
       if (token) {
         // Getting the permissions list from server
@@ -201,6 +202,10 @@ const actions: ActionTree<UserState, RootState> = {
     setUserInstanceUrl ({ commit }, payload){
       commit(types.USER_INSTANCE_URL_UPDATED, payload)
       updateInstanceUrl(payload)
+    },
+
+    setMaargeInstanceUrl ({ commit }, payload){
+      commit(types.USER_MAARGE_INSTANCE_URL_UPDATED, payload)
     },
 
   async fetchVirtualFacilities({ commit }, params) {
