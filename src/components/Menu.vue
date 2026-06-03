@@ -41,7 +41,7 @@ import {
 import { computed, defineComponent} from "vue"
 import { mapGetters } from "vuex";
 
-import { albumsOutline, shirtOutline, pricetagsOutline, settingsOutline } from "ionicons/icons";
+import { albumsOutline, receiptOutline, shirtOutline, pricetagsOutline, settingsOutline } from "ionicons/icons";
 import { useStore } from "@/store";
 import { useRouter } from "vue-router";
 import { hasPermission } from "@/authorization";
@@ -84,6 +84,16 @@ export default defineComponent({
         }
       },
       {
+        title: "Purchase orders",
+        url: "/purchase-orders",
+        childRoutes: ["/purchase-orders/"],
+        iosIcon: receiptOutline,
+        mdIcon: receiptOutline,
+        meta: {
+          permissionId: "APP_PURCHASE_ORDERS_VIEW"
+        }
+      },
+      {
         title: "Products",
         url: "/products",
         childRoutes: ["/product-details/"],
@@ -121,6 +131,7 @@ export default defineComponent({
       albumsOutline,
       getValidMenuItems,
       pricetagsOutline,
+      receiptOutline,
       settingsOutline,
       selectedIndex,
       shirtOutline,

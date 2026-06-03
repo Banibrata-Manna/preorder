@@ -17,5 +17,8 @@ module.exports = {
     }
   },
   runtimeCompiler: true,
+  devServer: {
+    historyApiFallback: true
+  },
   transpileDependencies: ['@hotwax/dxp-components']
 }
