@@ -41,7 +41,7 @@ import {
 import { computed, defineComponent} from "vue"
 import { mapGetters } from "vuex";
 
-import { albumsOutline, shirtOutline, pricetagsOutline, settingsOutline } from "ionicons/icons";
+import { albumsOutline, shirtOutline, pricetagsOutline, settingsOutline, documentTextOutline } from "ionicons/icons";
 import { useStore } from "@/store";
 import { useRouter } from "vue-router";
 import { hasPermission } from "@/authorization";
@@ -74,6 +74,12 @@ export default defineComponent({
     }
 
     const appPages = [
+      {
+        title: "Purchase Orders",
+        url: "/purchase-orders",
+        iosIcon: documentTextOutline,
+        mdIcon: documentTextOutline,
+      },
       {
         title: "Orders",
         url: "/orders",
@@ -119,6 +125,7 @@ export default defineComponent({
     return {
       appPages,
       albumsOutline,
+      documentTextOutline,
       getValidMenuItems,
       pricetagsOutline,
       settingsOutline,

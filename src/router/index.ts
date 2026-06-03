@@ -6,6 +6,7 @@ import AuditProductDetails from '../views/audit-product-details.vue'
 import Orders from '../views/orders.vue'
 import Audit from '../views/audit.vue'
 import Settings from '../views/settings.vue'
+import PurchaseOrders from '../views/PurchaseOrders.vue'
 import store from '@/store';
 import { DxpLogin, useAuthStore } from '@hotwax/dxp-components';
 import { loader } from '@/user-utils';
@@ -101,6 +102,12 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Settings',
     component: Settings,
     beforeEnter: authGuard
+  },
+  {
+    path: '/purchase-orders',
+    name: 'PurchaseOrders',
+    component: PurchaseOrders,
+    beforeEnter: authGuard,
   },
 ]
 
