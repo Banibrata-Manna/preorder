@@ -358,7 +358,7 @@ import { defineComponent } from "vue";
 import { mapGetters } from "vuex";
 import { useRouter } from "vue-router";
 import { useStore } from "@/store";
-import { DxpShopifyImg } from "@hotwax/dxp-components";
+import { DxpShopifyImg, getProductIdentificationValue, useProductIdentificationStore } from "@hotwax/dxp-components";
 
 export default defineComponent({
   name: "purchase-orders",
@@ -421,7 +421,8 @@ export default defineComponent({
       total: 'purchaseOrder/getListTotal',
       query: 'purchaseOrder/getQuery',
       isScrollable: 'purchaseOrder/isScrollable',
-      currentEComStore: 'user/getCurrentEComStore'
+      currentEComStore: 'user/getCurrentEComStore',
+      getProduct: 'product/getProduct'
     }),
     aggregateRowClass(): string {
       return {
@@ -653,16 +654,20 @@ export default defineComponent({
       return this.parseDate(value)?.toFormat('d LLL yyyy') || '-';
     },
     productImage(item: any) {
-      return item?.mainImageUrl || item?.productImageUrl || item?.mediumImageUrl || item?.smallImageUrl || '';
+      const cached = this.getProduct(item?.productId) || {};
+      return cached.mainImageUrl || cached.mediumImageUrl || cached.smallImageUrl || item?.mainImageUrl || item?.productImageUrl || '';
     },
     productKey(row: any) {
       return row?.productId || row?.productName || row?.internalName || row?.orderItemSeqId || 'unknown-product';
     },
     productSubtitle(row: any) {
-      return this.firstDistinct(this.productTitle(row), row?.productId, row?.internalName, row?.sku, row?.upc, row?.orderItemSeqId);
+      const cached = this.getProduct(row?.productId) || {};
+      const secondary = getProductIdentificationValue(this.productIdentificationPref.secondaryId, cached);
+      return secondary || this.firstDistinct(this.productTitle(row), row?.productId, row?.internalName, row?.sku, row?.upc, row?.orderItemSeqId);
     },
     productTitle(row: any) {
-      return row?.productName || row?.internalName || row?.productId || row?.orderItemSeqId || this.$t("Product");
+      const cached = this.getProduct(row?.productId) || {};
+      return getProductIdentificationValue(this.productIdentificationPref.primaryId, cached) || row?.productName || row?.internalName || row?.productId || this.$t("Product");
     },
     quantity(value: any) {
       if (value === undefined || value === null || value === '') return '-';
@@ -723,6 +728,8 @@ export default defineComponent({
   setup() {
     const router = useRouter();
     const store = useStore();
+    const productIdentificationStore = useProductIdentificationStore();
+    const productIdentificationPref = productIdentificationStore.getProductIdentificationPref;
     return {
       add,
       arrowDownOutline,
@@ -731,6 +738,8 @@ export default defineComponent({
       documentTextOutline,
       downloadOutline,
       filterOutline,
+      getProductIdentificationValue,
+      productIdentificationPref,
       router,
       store,
       swapVerticalOutline

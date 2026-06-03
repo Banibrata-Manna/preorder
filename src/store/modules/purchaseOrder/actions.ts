@@ -1,14 +1,15 @@
 import { ActionTree } from 'vuex'
 import RootState from '@/store/RootState'
 import PurchaseOrderState from './PurchaseOrderState'
-import { showToast } from '@/utils'
+import { hasError, showToast } from '@/utils'
 import { translate } from '@/i18n'
 import * as types from './mutation-types'
 import emitter from '@/event-bus'
+import { PurchaseOrderService } from '@/services/PurchaseOrderService'
 import { clone, purchaseOrderFixtures } from './mockData'
 
-let fixtureOrders = purchaseOrderFixtures.orders
 const fixtureAllocations = purchaseOrderFixtures.allocations
+let fixtureOrders = purchaseOrderFixtures.orders
 
 const ok = (data: any = {}) => Promise.resolve({ status: 200, data })
 
@@ -23,46 +24,6 @@ const orderStatusLabel = (statusId: string) => ({
   ITEM_CREATED: 'Created'
 } as any)[statusId] || statusId
 
-const lineRows = () => fixtureOrders.flatMap((order: any) => (order.items || []).map((item: any) => ({
-  ...order,
-  ...item,
-  items: undefined,
-  shipGroups: undefined,
-  orderStatusId: order.orderStatusId,
-  orderStatusDesc: order.orderStatusDesc || order.statusDesc,
-  statusDesc: item.itemStatusDesc || item.statusDesc || order.statusDesc,
-  facilityId: order.facilityId,
-  facilityName: order.facilityName
-})))
-
-const matchesQuery = (row: any, query: any) => {
-  const keyword = String(query.keyword || '').trim().toLowerCase()
-  if (keyword) {
-    const searchable = [
-      row.orderId,
-      row.orderName,
-      row.externalId,
-      row.productId,
-      row.productName,
-      row.internalName,
-      row.parentProductId,
-      row.parentProductName,
-      row.statusDesc,
-      row.itemStatusDesc
-    ].filter(Boolean).join(' ').toLowerCase()
-    if (!searchable.includes(keyword)) return false
-  }
-
-  if (query.orderStatusId?.length && !query.orderStatusId.includes(row.orderStatusId)) return false
-  if (query.itemStatusId?.length && !query.itemStatusId.includes(row.itemStatusId || row.statusId)) return false
-  if (query.facilityId && row.facilityId !== query.facilityId) return false
-  if (query.productId && row.productId !== query.productId) return false
-  if (query.estimatedDeliveryDateFrom && String(row.estimatedDeliveryDate || '').slice(0, 10) < query.estimatedDeliveryDateFrom) return false
-  if (query.estimatedDeliveryDateTo && String(row.estimatedDeliveryDate || '').slice(0, 10) > query.estimatedDeliveryDateTo) return false
-
-  return true
-}
-
 const findOrder = (orderId: string) => fixtureOrders.find((order: any) => order.orderId === orderId) || fixtureOrders[0]
 
 const findItem = (order: any, orderItemSeqId: string) => (order.items || []).find((item: any) => item.orderItemSeqId === orderItemSeqId)
@@ -76,13 +37,44 @@ const toastAndOk = (message: string, data: any = {}) => {
   return ok(data)
 }
 
+const buildSolrFilter = (query: any): string => {
+  const filters = ['docType: ORDER', 'orderTypeId: PURCHASE_ORDER']
+
+  if (query.productStoreId) filters.push(`productStoreId: ${query.productStoreId}`)
+  if (query.facilityId) filters.push(`facilityId: ${query.facilityId}`)
+  if (query.productId) filters.push(`productId: ${query.productId}`)
+  if (query.orderStatusId?.length) {
+    filters.push(`orderStatusId:(${query.orderStatusId.join(' OR ')})`)
+  }
+  if (query.itemStatusId?.length) {
+    filters.push(`orderItemStatusId:(${query.itemStatusId.join(' OR ')})`)
+  }
+  if (query.estimatedDeliveryDateFrom) {
+    filters.push(`estimatedDeliveryDate:[${query.estimatedDeliveryDateFrom}T00:00:00Z TO *]`)
+  }
+  if (query.estimatedDeliveryDateTo) {
+    filters.push(`estimatedDeliveryDate:[* TO ${query.estimatedDeliveryDateTo}T23:59:59Z]`)
+  }
+
+  return filters.join(' AND ')
+}
+
+const mapSolrDoc = (doc: any): any => ({
+  ...doc,
+  itemStatusId: doc.orderItemStatusId,
+  itemStatusDesc: doc.orderItemStatusDesc,
+  orderExternalId: doc.externalOrderId,
+  statusId: doc.orderItemStatusId || doc.orderStatusId,
+  statusDesc: doc.orderItemStatusDesc || doc.orderStatusDesc
+})
+
 const actions: ActionTree<PurchaseOrderState, RootState> = {
   async updateQuery ({ commit, dispatch, state }, { query }) {
     commit(types.PURCHASE_ORDER_QUERY_UPDATED, { query })
     return dispatch('fetchPurchaseOrders', { query: { ...state.query, ...query } })
   },
 
-  async fetchPurchaseOrders ({ commit }, payload = {}) {
+  async fetchPurchaseOrders ({ commit, state }, payload = {}) {
     const query = payload.query || {}
     const pageIndex = Number(query.pageIndex || 0)
     const limit = Number(query.limit || process.env.VUE_APP_VIEW_SIZE || 20)
@@ -90,11 +82,38 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     if (pageIndex === 0) emitter.emit('presentLoader')
     commit(types.PURCHASE_ORDER_LOADING_UPDATED, { loading: true })
     try {
-      const filteredRows = lineRows().filter((row: any) => matchesQuery(row, query))
-      const items = filteredRows.slice(pageIndex * limit, pageIndex * limit + limit)
-      commit(types.PURCHASE_ORDER_LIST_UPDATED, { items: clone(items), total: filteredRows.length })
+      const solrPayload = {
+        json: {
+          params: {
+            rows: limit,
+            start: pageIndex * limit,
+            sort: 'estimatedDeliveryDate asc'
+          },
+          filter: buildSolrFilter(query),
+          query: query.keyword ? `keywordSearchText:(${query.keyword})` : '*:*'
+        }
+      }
+
+      const resp = await PurchaseOrderService.fetchPurchaseOrders(solrPayload)
+      if (hasError(resp)) throw resp.data
+
+      const docs: any[] = resp.data?.response?.docs || []
+      const total: number = resp.data?.response?.numFound || 0
+      const items = docs.map(mapSolrDoc)
+
+      const productIds = [...new Set(items.flatMap((item: any) =>
+        [item.productId, item.parentProductId].filter(Boolean)
+      ))]
+      if (productIds.length) this.dispatch('product/fetchProducts', { productIds })
+
+      const allItems = pageIndex === 0 ? items : [...(state as any).list.items, ...items]
+
+      commit(types.PURCHASE_ORDER_LIST_UPDATED, { items: allItems, total })
       commit(types.PURCHASE_ORDER_QUERY_UPDATED, { query: { ...query, pageIndex, limit, hasUpdated: true } })
-      return ok({ purchaseOrders: items, totalOrdersCount: filteredRows.length })
+      return { purchaseOrders: items, totalOrdersCount: total }
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
     } finally {
       commit(types.PURCHASE_ORDER_LOADING_UPDATED, { loading: false })
       if (pageIndex === 0) emitter.emit('dismissLoader')
