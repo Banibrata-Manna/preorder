@@ -408,10 +408,24 @@ export default defineComponent({
     ...mapGetters({
       order: 'purchaseOrder/getCurrent',
       items: 'purchaseOrder/getItems',
-      shipGroups: 'purchaseOrder/getShipGroups'
+      shipGroups: 'purchaseOrder/getShipGroups',
+      getProduct: 'product/getProduct'
     }),
+    enrichedItems(): any[] {
+      return this.items.map((item: any) => {
+        const cached = this.getProduct(item.productId) || {};
+        return {
+          ...item,
+          mainImageUrl: item.mainImageUrl || cached.mainImageUrl || cached.mediumImageUrl,
+          parentProductId: item.parentProductId || cached.groupId,
+          parentProductName: item.parentProductName || cached.groupName,
+          internalName: item.internalName || cached.internalName,
+          productName: item.productName || cached.productName
+        };
+      });
+    },
     firstItem(): any {
-      return this.items[0] || {};
+      return this.enrichedItems[0] || {};
     },
     itemDisplayRows(): any[] {
       const rows: any[] = [];
@@ -438,7 +452,7 @@ export default defineComponent({
       return rows;
     },
     parentProductGroups(): any[] {
-      const groupsByKey = this.items.reduce((groups: any, item: any) => {
+      const groupsByKey = this.enrichedItems.reduce((groups: any, item: any) => {
         const groupKey = this.parentProductKey(item);
         if (!groups[groupKey]) groups[groupKey] = [];
         groups[groupKey].push(item);
@@ -474,9 +488,6 @@ export default defineComponent({
       const preOrders = this.firstNumeric(this.order.preOrderCount, this.order.preorderCount, this.order.preOrdersCount, this.order.preorderOrdersCount, this.sumField(this.items, ['preOrderCount', 'preorderCount']));
       const backOrders = this.firstNumeric(this.order.backOrderCount, this.order.backorderCount, this.order.backOrdersCount, this.order.backorderOrdersCount, this.sumField(this.items, ['backOrderCount', 'backorderCount']));
       return { all, preOrders, backOrders };
-    },
-    defaultShipGroupSeqId(): string {
-      return this.shipGroups[0]?.shipGroupSeqId || '00001';
     },
     defaultFacilityId(): string {
       return this.shipGroups[0]?.facilityId || this.shipGroups[0]?.orderFacilityId || '';
@@ -728,9 +739,9 @@ export default defineComponent({
       return this.firstDistinct(this.parentProductTitle(row), row.parentProductId, row.virtualProductId, row.parentProductInternalName, row.productId);
     },
     parentProductKey(row: any = {}) {
-      const explicitParentKey = row.parentProductId || row.virtualProductId || row.groupId || row.parentProductName || row.parentProductInternalName;
-      if (explicitParentKey) return explicitParentKey;
-      if (this.items.length > 1) return this.firstItem.productId || this.order.orderId || 'purchase-order-items';
+      const parentKey = row.parentProductId || row.virtualProductId || row.groupId || row.parentProductName || row.parentProductInternalName;
+      if (parentKey) return parentKey;
+      if (this.enrichedItems.length > 1) return this.firstItem.productId || this.order.orderId || 'purchase-order-items';
       return row.productId || row.orderItemSeqId || 'purchase-order-item';
     },
     productImage(item: any = {}) {
@@ -919,7 +930,6 @@ export default defineComponent({
           quantity: Number(this.draftItem.quantity),
           unitPrice: Number(this.draftItem.unitPrice || 0),
           estimatedDeliveryDate: this.toTimestamp(this.draftItem.estimatedDeliveryDate),
-          shipGroupSeqId: this.defaultShipGroupSeqId,
           isNewProduct: this.draftItem.isNewProduct ? 'Y' : 'N'
         }
       });

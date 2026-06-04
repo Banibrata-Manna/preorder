@@ -277,12 +277,11 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     try {
       const payload: any = {
         orderId,
-        shipGroupSeqId: item.shipGroupSeqId || '00001',
         productId: item.productId,
         quantity: item.quantity,
         disableResetGrandTotal: true
       }
-      if (item.unitPrice) payload.basePrice = item.unitPrice
+      if (item.unitPrice) payload.unitPrice = item.unitPrice
       if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
       if (item.isNewProduct) payload.isNewProduct = item.isNewProduct
 
