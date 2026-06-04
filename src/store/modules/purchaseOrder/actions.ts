@@ -6,6 +6,7 @@ import { translate } from '@/i18n'
 import * as types from './mutation-types'
 import emitter from '@/event-bus'
 import { PurchaseOrderService } from '@/services/PurchaseOrderService'
+import { DateTime } from 'luxon'
 import { clone, purchaseOrderFixtures } from './mockData'
 
 const fixtureAllocations = purchaseOrderFixtures.allocations
@@ -272,21 +273,27 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     return toastAndOk('Purchase order status updated')
   },
 
-  async addItem ({ commit }, { orderId, item }) {
-    const order = findOrder(orderId)
-    const nextSeqId = String((order.items || []).length + 1).padStart(5, '0')
-    order.items.push({
-      ...item,
-      orderItemSeqId: nextSeqId,
-      productName: item.productName || item.productId,
-      internalName: item.internalName || item.productId,
-      itemStatusId: 'ITEM_CREATED',
-      itemStatusDesc: 'Created',
-      statusId: 'ITEM_CREATED',
-      receivedQuantity: 0
-    })
-    syncCurrent(commit, orderId)
-    return toastAndOk('Item added')
+  async addItem ({ dispatch }, { orderId, item }) {
+    try {
+      const payload: any = {
+        orderId,
+        shipGroupSeqId: item.shipGroupSeqId || '00001',
+        productId: item.productId,
+        quantity: item.quantity,
+        disableResetGrandTotal: true
+      }
+      if (item.unitPrice) payload.basePrice = item.unitPrice
+      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
+
+      const resp = await PurchaseOrderService.addOrderItem(payload)
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Item added'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   async updateItem ({ commit }, { orderId, orderItemSeqId, item }) {

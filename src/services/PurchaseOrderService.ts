@@ -46,9 +46,23 @@ const fetchFacilityContactMechs = async (params: any): Promise<any> => {
   });
 }
 
+const addOrderItem = async (payload: any): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${payload.orderId}/items`,
+    method: 'POST',
+    data: payload,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+  });
+}
+
 export const PurchaseOrderService = {
   fetchPurchaseOrders,
   fetchPurchaseOrder,
   fetchPurchaseOrderReceipts,
-  fetchFacilityContactMechs
+  fetchFacilityContactMechs,
+  addOrderItem
 }
