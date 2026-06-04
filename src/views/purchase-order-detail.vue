@@ -409,6 +409,7 @@ export default defineComponent({
       order: 'purchaseOrder/getCurrent',
       items: 'purchaseOrder/getItems',
       shipGroups: 'purchaseOrder/getShipGroups',
+      allocations: 'purchaseOrder/getAllocations',
       getProduct: 'product/getProduct'
     }),
     enrichedItems(): any[] {
@@ -484,10 +485,12 @@ export default defineComponent({
       return this.firstItem?.estimatedDeliveryDate || this.order.estimatedDeliveryDate || this.order.orderDate;
     },
     allocationSummary(): any {
-      const all = this.firstNumeric(this.order.allocationCount, this.order.allocationsCount, this.order.linkedSalesOrderCount, this.order.salesOrderCount, this.order.allocations?.length, this.sumField(this.items, ['allocationCount', 'salesOrderCount']));
-      const preOrders = this.firstNumeric(this.order.preOrderCount, this.order.preorderCount, this.order.preOrdersCount, this.order.preorderOrdersCount, this.sumField(this.items, ['preOrderCount', 'preorderCount']));
-      const backOrders = this.firstNumeric(this.order.backOrderCount, this.order.backorderCount, this.order.backOrdersCount, this.order.backorderOrdersCount, this.sumField(this.items, ['backOrderCount', 'backorderCount']));
-      return { all, preOrders, backOrders };
+      const linked = (this.allocations as any[]).filter((a: any) => a.allocationType === 'Linked')
+      return {
+        all: linked.length,
+        preOrders: linked.filter((a: any) => a.facilityId === 'PRE_ORDER_PARKING').length,
+        backOrders: linked.filter((a: any) => a.facilityId === 'BACKORDER_PARKING').length
+      }
     },
     defaultFacilityId(): string {
       return this.shipGroups[0]?.facilityId || this.shipGroups[0]?.orderFacilityId || '';
@@ -553,6 +556,7 @@ export default defineComponent({
   methods: {
     async load() {
       await this.store.dispatch('purchaseOrder/fetchPurchaseOrder', { orderId: this.orderId });
+      this.store.dispatch('purchaseOrder/fetchAllocations', { orderId: this.orderId, allocationView: 'linked' });
     },
     allocationLabel(count: any) {
       const numericCount = this.toNumber(count);

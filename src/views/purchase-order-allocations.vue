@@ -8,7 +8,7 @@
         <ion-title>{{ $t("Review allocations") }}</ion-title>
       </ion-toolbar>
       <ion-toolbar>
-        <ion-segment :value="allocationView" @ionChange="changeView($event.detail.value)">
+        <ion-segment :value="allocationView" @ionChange="changeView(String($event.detail.value ?? 'linked'))">
           <ion-segment-button value="linked">
             <ion-label>{{ $t("Linked") }}</ion-label>
           </ion-segment-button>

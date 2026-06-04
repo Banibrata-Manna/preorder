@@ -194,9 +194,6 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       const order = {
         ...orderData,
-        preOrderCount: rawItems.filter((i: any) => i.isNewProduct === 'Y').length,
-        backOrderCount: rawItems.filter((i: any) => i.isNewProduct === 'N').length,
-        allocationCount: 0,
         items,
         shipGroups: [{
           shipGroupSeqId: '00001',
@@ -241,9 +238,6 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
       statusDesc: orderStatusLabel(payload.statusId || 'ORDER_CREATED'),
       facilityId: firstShipGroup.orderFacilityId || firstShipGroup.facilityId || '',
       facilityName: firstShipGroup.orderFacilityId || firstShipGroup.facilityId || '',
-      allocationCount: 0,
-      preOrderCount: 0,
-      backOrderCount: 0,
       shipGroups: [{
         shipGroupSeqId: '00001',
         facilityId: firstShipGroup.facilityId,
@@ -335,11 +329,34 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
   },
 
   async fetchAllocations ({ commit }, { orderId, allocationView = 'linked', productId = '' }) {
-    const allocations = (fixtureAllocations[orderId] || [])
-      .filter((allocation: any) => allocationView === 'all' || String(allocation.allocationType || '').toLowerCase() === allocationView)
-      .filter((allocation: any) => !productId || allocation.productId === productId)
-    commit(types.PURCHASE_ORDER_ALLOCATIONS_UPDATED, { items: clone(allocations), view: allocationView })
-    return ok({ allocations })
+    try {
+      let linked: any[] = []
+      let suggested: any[] = []
+
+      if (allocationView === 'linked' || allocationView === 'all') {
+        const resp = await PurchaseOrderService.fetchPOAllocations(orderId, productId || undefined)
+        if (!hasError(resp)) {
+          linked = (resp.data as any[] || []).map((item: any) => ({ ...item, allocationType: 'Linked' }))
+        }
+      }
+
+      if (allocationView === 'suggested' || allocationView === 'all') {
+        const resp = await PurchaseOrderService.fetchPOSuggestions(orderId, productId ? [productId] : undefined)
+        if (!hasError(resp)) {
+          suggested = (resp.data?.suggestions || []).map((item: any) => ({ ...item, allocationType: 'Suggested' }))
+        }
+      }
+
+      const allocations = allocationView === 'linked' ? linked
+        : allocationView === 'suggested' ? suggested
+        : [...linked, ...suggested]
+
+      commit(types.PURCHASE_ORDER_ALLOCATIONS_UPDATED, { items: allocations, view: allocationView })
+      return { allocations }
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   updateSelectedAllocations ({ commit }, { items }) {
