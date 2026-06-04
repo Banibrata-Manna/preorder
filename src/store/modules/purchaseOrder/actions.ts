@@ -284,6 +284,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
       }
       if (item.unitPrice) payload.basePrice = item.unitPrice
       if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
+      if (item.isNewProduct) payload.isNewProduct = item.isNewProduct
 
       const resp = await PurchaseOrderService.addOrderItem(payload)
       if (hasError(resp)) throw resp.data

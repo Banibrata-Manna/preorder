@@ -118,6 +118,57 @@
         </ion-button>
       </ion-item>
 
+      <div v-if="showAddItem" class="purchase-order-add-item">
+        <ion-item>
+          <ion-icon slot="start" :icon="searchOutline" />
+          <ion-input
+            :placeholder="$t('Search by SKU')"
+            :clear-input="true"
+            v-model="productSearchQuery"
+            @keyup.enter="findProduct()"
+            @ionClear="clearProductSearch()" />
+        </ion-item>
+
+        <ion-item v-if="isSearchingProduct" lines="none">
+          <ion-spinner name="crescent" />
+        </ion-item>
+
+        <ion-item v-else-if="productSearchQuery && !searchedProduct.productId" lines="none">
+          <ion-label color="medium">{{ $t("No product found") }}</ion-label>
+        </ion-item>
+
+        <div v-else-if="searchedProduct.productId" class="list-item purchase-order-draft-row">
+          <ion-item lines="none">
+            <ion-thumbnail slot="start">
+              <DxpShopifyImg :src="productImage(searchedProduct)" size="small" />
+            </ion-thumbnail>
+            <ion-label>
+              <h2>{{ itemPrimary(searchedProduct) }}</h2>
+              <p>{{ itemSecondary(searchedProduct) }}</p>
+            </ion-label>
+          </ion-item>
+          <ion-item>
+            <ion-input type="number" :label="$t('Qty')" label-placement="floating" min="1" v-model="draftItem.quantity" />
+          </ion-item>
+          <ion-item class="tablet">
+            <ion-input type="number" :label="$t('Unit price')" label-placement="floating" min="0" v-model="draftItem.unitPrice" />
+          </ion-item>
+          <ion-item class="tablet">
+            <ion-input type="date" :label="$t('Arrival')" label-placement="floating" v-model="draftItem.estimatedDeliveryDate" />
+          </ion-item>
+          <ion-item class="tablet" lines="none">
+            <ion-label>{{ $t("New product") }}</ion-label>
+            <ion-toggle :checked="draftItem.isNewProduct" @ionChange="draftItem.isNewProduct = $event.detail.checked" />
+          </ion-item>
+          <div class="ion-text-center ion-padding-end">
+            <ion-button fill="outline" :disabled="!draftItem.quantity" @click="addItem()">
+              <ion-icon slot="start" :icon="add" />
+              {{ $t("Add") }}
+            </ion-button>
+          </div>
+        </div>
+      </div>
+
       <main class="purchase-order-items">
         <ion-list v-if="items.length === 0">
           <ion-item>
@@ -243,30 +294,6 @@
           </ion-content>
         </ion-modal>
 
-      <ion-list v-if="showAddItem" class="purchase-order-add-item">
-        <ion-item>
-          <ion-label>{{ $t("Product") }}</ion-label>
-          <ion-input slot="end" v-model="newItem.productId" />
-        </ion-item>
-        <ion-item>
-          <ion-label>{{ $t("Quantity") }}</ion-label>
-          <ion-input slot="end" type="number" v-model="newItem.quantity" />
-        </ion-item>
-        <ion-item>
-          <ion-label>{{ $t("Unit price") }}</ion-label>
-          <ion-input slot="end" type="number" v-model="newItem.unitPrice" />
-        </ion-item>
-        <ion-item>
-          <ion-label>{{ $t("Arrival") }}</ion-label>
-          <ion-input slot="end" type="date" v-model="newItem.estimatedDeliveryDate" />
-        </ion-item>
-        <ion-item lines="none">
-          <ion-button slot="end" @click="addItem">
-            <ion-icon slot="start" :icon="add" />
-            {{ $t("Add item") }}
-          </ion-button>
-        </ion-item>
-      </ion-list>
       </main>
     </ion-content>
   </ion-page>
@@ -293,8 +320,10 @@ import {
   IonNote,
   IonPage,
   IonPopover,
+  IonSpinner,
   IonThumbnail,
   IonTitle,
+  IonToggle,
   IonToolbar
 } from "@ionic/vue";
 import {
@@ -309,6 +338,7 @@ import {
   fitnessOutline,
   gitMergeOutline,
   refreshOutline,
+  searchOutline,
   shirtOutline,
   ticketOutline
 } from "ionicons/icons";
@@ -318,6 +348,8 @@ import { mapGetters } from "vuex";
 import { useRoute, useRouter } from "vue-router";
 import { useStore } from "@/store";
 import { DxpShopifyImg } from "@hotwax/dxp-components";
+import { ProductService } from "@/services/ProductService";
+import { hasError } from "@/utils";
 
 export default defineComponent({
   name: "purchase-order-detail",
@@ -341,8 +373,10 @@ export default defineComponent({
     IonNote,
     IonPage,
     IonPopover,
+    IonSpinner,
     IonThumbnail,
     IonTitle,
+    IonToggle,
     IonToolbar
   },
   data() {
@@ -359,11 +393,14 @@ export default defineComponent({
       showAddItem: false,
       showItemActions: false,
       showReceiveControls: false,
-      newItem: {
-        productId: '',
+      productSearchQuery: '',
+      isSearchingProduct: false,
+      searchedProduct: {} as any,
+      draftItem: {
         quantity: 1,
         unitPrice: 0,
-        estimatedDeliveryDate: ''
+        estimatedDeliveryDate: '',
+        isNewProduct: false
       }
     }
   },
@@ -847,20 +884,47 @@ export default defineComponent({
         }
       });
     },
+    async findProduct() {
+      const q = this.productSearchQuery.trim().toLowerCase();
+      if (!q) return;
+      this.isSearchingProduct = true;
+      this.searchedProduct = {};
+      try {
+        const resp = await ProductService.fetchProducts({
+          filters: [
+            'isVirtual: false',
+            `(internalName: *${q}* OR productId: *${q}* OR sku: *${q}*)`
+          ],
+          viewSize: 10
+        });
+        if (!hasError(resp) && resp.data.response.numFound > 0) {
+          this.searchedProduct = resp.data.response.docs[0];
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      this.isSearchingProduct = false;
+    },
+    clearProductSearch() {
+      this.productSearchQuery = '';
+      this.searchedProduct = {};
+      this.draftItem = { quantity: 1, unitPrice: 0, estimatedDeliveryDate: '', isNewProduct: true };
+    },
     async addItem() {
-      if (!this.newItem.productId) return;
+      if (!this.searchedProduct.productId || !this.draftItem.quantity) return;
       await this.store.dispatch('purchaseOrder/addItem', {
         orderId: this.orderId,
         item: {
-          productId: this.newItem.productId,
-          quantity: Number(this.newItem.quantity || 1),
-          unitPrice: Number(this.newItem.unitPrice || 0),
-          availableToPromise: Number(this.newItem.quantity || 1),
-          estimatedDeliveryDate: this.toTimestamp(this.newItem.estimatedDeliveryDate),
-          shipGroupSeqId: this.defaultShipGroupSeqId
+          productId: this.searchedProduct.productId,
+          quantity: Number(this.draftItem.quantity),
+          unitPrice: Number(this.draftItem.unitPrice || 0),
+          estimatedDeliveryDate: this.toTimestamp(this.draftItem.estimatedDeliveryDate),
+          shipGroupSeqId: this.defaultShipGroupSeqId,
+          isNewProduct: this.draftItem.isNewProduct ? 'Y' : 'N'
         }
       });
-      this.newItem = { productId: '', quantity: 1, unitPrice: 0, estimatedDeliveryDate: '' };
+      this.clearProductSearch();
+      this.showAddItem = false;
     },
     navigateTo(path: string) {
       (document.activeElement as HTMLElement)?.blur?.();
@@ -892,6 +956,7 @@ export default defineComponent({
       orderId: route.params.orderId as string,
       refreshOutline,
       router,
+      searchOutline,
       shirtOutline,
       store,
       ticketOutline
