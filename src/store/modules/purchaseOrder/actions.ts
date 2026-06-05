@@ -14,16 +14,6 @@ let fixtureOrders = purchaseOrderFixtures.orders
 
 const ok = (data: any = {}) => Promise.resolve({ status: 200, data })
 
-const orderStatusLabel = (statusId: string) => ({
-  ORDER_APPROVED: 'Approved',
-  ORDER_CANCELLED: 'Cancelled',
-  ORDER_COMPLETED: 'Completed',
-  ORDER_CREATED: 'Created',
-  ITEM_APPROVED: 'Approved',
-  ITEM_CANCELLED: 'Cancelled',
-  ITEM_COMPLETED: 'Completed',
-  ITEM_CREATED: 'Created'
-} as any)[statusId] || statusId
 
 const findOrder = (orderId: string) => fixtureOrders.find((order: any) => order.orderId === orderId) || fixtureOrders[0]
 
@@ -222,49 +212,30 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     }
   },
 
-  async createPurchaseOrder ({ commit }, { payload }) {
-    const orderId = `HCPO_UI_${String(fixtureOrders.length + 1).padStart(3, '0')}`
-    const firstShipGroup = payload.shipGroups?.[0] || {}
-    const firstItem = firstShipGroup.items?.[0] || {}
-    const order = {
-      orderId,
-      orderName: payload.orderName || orderId,
-      externalId: payload.externalId || orderId,
-      orderDate: new Date().toISOString(),
-      estimatedDeliveryDate: firstShipGroup.estimatedDeliveryDate || firstItem.estimatedDeliveryDate || '',
-      orderStatusId: payload.statusId || 'ORDER_CREATED',
-      orderStatusDesc: orderStatusLabel(payload.statusId || 'ORDER_CREATED'),
-      statusId: payload.statusId || 'ORDER_CREATED',
-      statusDesc: orderStatusLabel(payload.statusId || 'ORDER_CREATED'),
-      facilityId: firstShipGroup.orderFacilityId || firstShipGroup.facilityId || '',
-      facilityName: firstShipGroup.orderFacilityId || firstShipGroup.facilityId || '',
-      shipGroups: [{
-        shipGroupSeqId: '00001',
-        facilityId: firstShipGroup.facilityId,
-        orderFacilityId: firstShipGroup.orderFacilityId || firstShipGroup.facilityId,
-        facilityName: firstShipGroup.orderFacilityId || firstShipGroup.facilityId
-      }],
-      items: [{
-        ...firstItem,
-        orderItemSeqId: '00001',
-        itemStatusId: 'ITEM_CREATED',
-        itemStatusDesc: 'Created',
-        statusId: 'ITEM_CREATED'
-      }]
+  // FIXME: Migrate this to moqui, this api requires Vendor and Supplier, can't be used now.
+  async createPurchaseOrder (_, { payload }) {
+    try {
+      const resp = await PurchaseOrderService.createPurchaseOrder(payload)
+      if (hasError(resp)) throw resp.data
+      showToast(translate('Purchase order created'))
+      return resp
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
     }
-    fixtureOrders = [order, ...fixtureOrders]
-    commit(types.PURCHASE_ORDER_CURRENT_UPDATED, { order: clone(order) })
-    return toastAndOk('Purchase order created', { orderId })
   },
 
-  async updateStatus ({ commit }, { orderId, statusId }) {
-    const order = findOrder(orderId)
-    order.statusId = statusId
-    order.orderStatusId = statusId
-    order.statusDesc = orderStatusLabel(statusId)
-    order.orderStatusDesc = orderStatusLabel(statusId)
-    syncCurrent(commit, orderId)
-    return toastAndOk('Purchase order status updated')
+  async updateStatus ({ dispatch }, { orderId, statusId }) {
+    try {
+      const resp = await PurchaseOrderService.changeOrderStatus(orderId, statusId, { setItemStatus: true })
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Purchase order status updated'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   async addItem ({ dispatch }, { orderId, item }) {
@@ -290,18 +261,39 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     }
   },
 
-  async updateItem ({ commit }, { orderId, orderItemSeqId, item }) {
-    const existing = findItem(findOrder(orderId), orderItemSeqId)
-    if (existing) Object.assign(existing, item)
-    syncCurrent(commit, orderId)
-    return toastAndOk('Item updated')
+  async updateItem ({ dispatch }, { orderId, orderItemSeqId, item }) {
+    try {
+      const payload: any = {}
+      if (item.quantity !== undefined) { 
+        payload.quantity = item.quantity
+        payload.availableToPromise = item.quantity
+      }
+      if (item.unitPrice !== undefined) payload.unitPrice = item.unitPrice
+      if (item.availableToPromise !== undefined) payload.availableToPromise = item.availableToPromise
+      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
+
+      const resp = await PurchaseOrderService.updateOrderItem(orderId, orderItemSeqId, payload)
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Item updated'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
-  async deleteItem ({ commit }, { orderId, orderItemSeqId }) {
-    const order = findOrder(orderId)
-    order.items = (order.items || []).filter((item: any) => item.orderItemSeqId !== orderItemSeqId)
-    syncCurrent(commit, orderId)
-    return toastAndOk('Item removed')
+  async deleteItem ({ dispatch }, { orderId, orderItemSeqId }) {
+    try {
+      const resp = await PurchaseOrderService.changeOrderItemStatus(orderId, orderItemSeqId, 'ITEM_CANCELLED')
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Item removed'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   async updateItemArrivalDate ({ dispatch }, payload) {
@@ -317,15 +309,16 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
   },
 
   async updateItemStatus ({ dispatch }, { orderId, orderItemSeqId, statusId }) {
-    return dispatch('updateItem', {
-      orderId,
-      orderItemSeqId,
-      item: {
-        statusId,
-        itemStatusId: statusId,
-        itemStatusDesc: orderStatusLabel(statusId)
-      }
-    })
+    try {
+      const resp = await PurchaseOrderService.changeOrderItemStatus(orderId, orderItemSeqId, statusId)
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Item status updated'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   async fetchAllocations ({ commit }, { orderId, allocationView = 'linked', productId = '' }) {

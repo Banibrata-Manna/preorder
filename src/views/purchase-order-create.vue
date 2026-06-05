@@ -89,7 +89,8 @@ import { defineComponent } from "vue";
 import { mapGetters } from "vuex";
 import { useRouter } from "vue-router";
 import { useStore } from "@/store";
-import { showToast } from "@/utils";
+import { hasError, showToast } from "@/utils";
+import { PurchaseOrderService } from "@/services/PurchaseOrderService";
 
 export default defineComponent({
   name: "purchase-order-create",
@@ -141,27 +142,58 @@ export default defineComponent({
         showToast(this.$t("Product and facility are required"));
         return;
       }
-      const payload = {
-        orderName: this.form.orderName || undefined,
-        externalId: this.form.externalId || undefined,
-        productStoreId: this.form.productStoreId || undefined,
-        statusId: 'ORDER_CREATED',
-        shipGroups: [{
+
+      // Resolve shipFrom contact mech and billTo org in parallel
+      const [contactMechResp, orgResp] = await Promise.allSettled([
+        PurchaseOrderService.fetchFacilityContactMechs({
           facilityId: this.form.facilityId,
-          orderFacilityId: this.form.orderFacilityId || this.form.facilityId,
-          estimatedDeliveryDate: this.toTimestamp(this.form.estimatedDeliveryDate),
+          contactMechPurposeTypeId: 'PRIMARY_LOCATION,PRIMARY_PHONE'
+        }),
+        PurchaseOrderService.fetchOrganization()
+      ])
+
+      const facilityContactMechs = (contactMechResp.status === 'fulfilled' && !hasError(contactMechResp.value))
+        ? contactMechResp.value?.data?.facilityContactMechs || []
+        : []
+      const contactMechId = facilityContactMechs.find((c: any) => c.contactMechPurposeTypeId === 'PRIMARY_LOCATION')?.contactMechId || ''
+      const phoneContactMechId = facilityContactMechs.find((c: any) => c.contactMechPurposeTypeId === 'PRIMARY_PHONE')?.contactMechId || ''
+
+      const billToPartyId = (orgResp.status === 'fulfilled' && !hasError(orgResp.value))
+        ? orgResp.value?.data?.[0]?.partyId || ''
+        : ''
+
+      const payload = {
+        externalId: this.form.externalId || undefined,
+        facilityId: this.form.facilityId,
+        arrivalDate: this.toTimestamp(this.form.estimatedDeliveryDate),
+        statusId: 'ORDER_CREATED',
+        productStoreId: this.form.productStoreId || undefined,
+        orderAdjustments: [],
+        orderPaymentPref: [],
+        shipGroup: [{
+          facilityId: this.form.facilityId,
+          shipFrom: {
+            postalAddress: { id: contactMechId, externalId: '' },
+            phoneNumber: { id: phoneContactMechId, externalId: '' }
+          },
           items: [{
             productId: this.form.productId,
             quantity: Number(this.form.quantity || 1),
-            availableToPromise: Number(this.form.quantity || 1),
             unitPrice: Number(this.form.unitPrice || 0),
-            estimatedDeliveryDate: this.toTimestamp(this.form.estimatedDeliveryDate)
+            statusId: 'ITEM_CREATED'
           }]
-        }]
-      };
-      const resp = await this.store.dispatch('purchaseOrder/createPurchaseOrder', { payload });
-      const orderId = resp?.data?.orderId;
-      if (orderId) this.router.push(`/purchase-orders/${orderId}`);
+        }],
+        billTo: {
+          id: billToPartyId,
+          externalId: '',
+          postalAddress: { id: '', externalId: '' },
+          phoneNumber: { id: '', externalId: '' }
+        }
+      }
+
+      const resp = await this.store.dispatch('purchaseOrder/createPurchaseOrder', { payload })
+      const orderId = resp?.data?.order?.orderId || resp?.data?.orderId
+      if (orderId) this.router.push(`/purchase-orders/${orderId}`)
     }
   },
   setup() {

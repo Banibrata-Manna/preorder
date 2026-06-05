@@ -25,6 +25,10 @@
     <ion-content>
       <ion-item lines="none">
         <ion-label>{{ allocations.length }} {{ $t("allocations") }}</ion-label>
+        <ion-button v-if="allocationView === 'suggested' && allocations.length > 0" slot="end" fill="outline" @click="linkAllAllocations">
+          <ion-icon slot="start" :icon="linkOutline" />
+          {{ $t("Link all") }}
+        </ion-button>
       </ion-item>
 
       <ion-item v-if="allocations.length === 0">
@@ -213,7 +217,18 @@ export default defineComponent({
     },
     async linkAllocation(allocation: any) {
       try {
-        await PurchaseOrderService.assignPOItemsToSOItems(this.orderId, allocation.productId)
+        await PurchaseOrderService.assignPOItemsToSOItems(this.orderId, allocation.productId, allocation.orderId)
+        await this.fetchAllocations(this.allocationView)
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async linkAllAllocations() {
+      try {
+        const productIds = [...new Set((this.allocations as any[]).map((a: any) => a.productId).filter(Boolean))]
+        await Promise.all(productIds.map((productId: string) =>
+          PurchaseOrderService.assignPOItemsToSOItems(this.orderId, productId)
+        ))
         await this.fetchAllocations(this.allocationView)
       } catch (error) {
         console.error(error)

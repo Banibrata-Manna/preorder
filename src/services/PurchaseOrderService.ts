@@ -72,6 +72,45 @@ const fetchPOSuggestions = async (orderId: string, productIds?: string[]): Promi
   });
 }
 
+const changeOrderStatus = async (orderId: string, statusId: string, params?: any): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/status`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { statusId, ...params }
+  });
+}
+
+const changeOrderItemStatus = async (orderId: string, orderItemSeqId: string, statusId: string, params?: any): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/items/${orderItemSeqId}/status`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { statusId, ...params }
+  });
+}
+
+const updateOrderItem = async (orderId: string, orderItemSeqId: string, payload: any): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/items/${orderItemSeqId}`,
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: payload
+  });
+}
+
 const addOrderItem = async (payload: any): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
@@ -82,6 +121,27 @@ const addOrderItem = async (payload: any): Promise<any> => {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${store.getters['user/getUserToken']}`
     },
+  });
+}
+
+const fetchOrganization = async (): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: 'admin/organizations',
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    params: { roleTypeId: 'INTERNAL_ORGANIZATIO', pageSize: 1 }
+  });
+}
+
+const createPurchaseOrder = async (payload: any): Promise<any> => {
+  return api({
+    url: 'createPurchaseOrder',
+    method: 'POST',
+    data: { order: payload }
   });
 }
 
@@ -98,7 +158,7 @@ const deletePOAllocation = async (poOrderId: string, soOrderId: string, soOrderI
   });
 }
 
-const assignPOItemsToSOItems = async (orderId: string, productId: string): Promise<any> => {
+const assignPOItemsToSOItems = async (orderId: string, productId: string, salesOrderId?: string): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
     url: `oms/purchaseOrders/${orderId}/assign`,
@@ -107,7 +167,7 @@ const assignPOItemsToSOItems = async (orderId: string, productId: string): Promi
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${store.getters['user/getUserToken']}`
     },
-    data: { productId }
+    data: { productId, ...(salesOrderId ? { salesOrderId } : {}) }
   });
 }
 
@@ -119,6 +179,11 @@ export const PurchaseOrderService = {
   fetchPOAllocations,
   fetchPOSuggestions,
   addOrderItem,
+  changeOrderStatus,
+  changeOrderItemStatus,
+  updateOrderItem,
+  createPurchaseOrder,
+  fetchOrganization,
   deletePOAllocation,
   assignPOItemsToSOItems
 }

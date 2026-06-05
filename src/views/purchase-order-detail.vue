@@ -30,15 +30,15 @@
 
       <ion-popover :is-open="showActions" :event="actionsEvent" @didDismiss="closeActions">
         <ion-list>
-          <ion-item button @click="showActions = false; changeStatus('ORDER_APPROVED')">
+          <ion-item v-if="order.statusId === 'ORDER_CREATED'" button @click="showActions = false; changeStatus('ORDER_APPROVED')">
             <ion-icon slot="start" :icon="checkmarkCircle" />
             <ion-label>{{ $t("Approve") }}</ion-label>
           </ion-item>
-          <ion-item button @click="showActions = false; changeStatus('ORDER_CANCELLED')">
+          <ion-item v-if="['ORDER_CREATED', 'ORDER_APPROVED'].includes(order.statusId)" button @click="showActions = false; changeStatus('ORDER_CANCELLED')">
             <ion-icon slot="start" :icon="closeCircle" />
             <ion-label>{{ $t("Cancel") }}</ion-label>
           </ion-item>
-          <ion-item button @click="showActions = false; navigateTo(`/purchase-orders/${orderId}/allocations`)">
+          <ion-item v-if="order.statusId === 'ORDER_APPROVED'" button @click="showActions = false; navigateTo(`/purchase-orders/${orderId}/allocations`)">
             <ion-icon slot="start" :icon="gitMergeOutline" />
             <ion-label>{{ $t("Allocations") }}</ion-label>
           </ion-item>
@@ -268,11 +268,30 @@
             <ion-list-header>
               <ion-label>{{ itemPrimary(activeItem) }}</ion-label>
             </ion-list-header>
-            <ion-item button @click="editActiveItemQuantity">{{ $t("Edit quantity") }}</ion-item>
-            <ion-item button @click="confirmRemoveActiveItem">{{ $t("Remove item") }}</ion-item>
-            <ion-item button @click="editActiveItemArrivalDate">{{ $t("Edit arrival date") }}</ion-item>
-            <ion-item button @click="viewActiveItemAllocations('suggested')">{{ $t("Allocate pre-orders") }}</ion-item>
-            <ion-item lines="none" button @click="viewActiveItemAllocations('linked')">{{ $t("View allocations") }}</ion-item>
+            <ion-item>
+              <ion-input type="number" :label="$t('Quantity')" label-placement="floating" min="1"
+                :value="draftValue(activeItem, 'quantity')"
+                @ionInput="setDraft(activeItem, 'quantity', $event.detail.value)" />
+            </ion-item>
+            <ion-item>
+              <ion-input type="number" :label="$t('Unit price')" label-placement="floating" min="0"
+                :value="draftValue(activeItem, 'unitPrice')"
+                @ionInput="setDraft(activeItem, 'unitPrice', $event.detail.value)" />
+            </ion-item>
+            <ion-item>
+              <ion-input type="date" :label="$t('Arrival date')" label-placement="floating"
+                :value="draftDate(activeItem)"
+                @ionChange="setDraft(activeItem, 'estimatedDeliveryDate', $event.detail.value)" />
+            </ion-item>
+            <ion-item lines="none">
+              <ion-button fill="clear" slot="end" @click="saveItemEdit">{{ $t("Save") }}</ion-button>
+              <ion-button fill="clear" slot="end" @click="closeItemActions">{{ $t("Cancel") }}</ion-button>
+            </ion-item>
+            <template v-if="activeItem.itemStatusId === 'ITEM_APPROVED'">
+              <ion-item button @click="viewActiveItemAllocations('suggested')">{{ $t("Allocate pre-orders") }}</ion-item>
+              <ion-item button @click="viewActiveItemAllocations('linked')">{{ $t("View allocations") }}</ion-item>
+              <ion-item lines="none" button color="danger" @click="confirmRemoveActiveItem">{{ $t("Remove item") }}</ion-item>
+            </template>
           </ion-list>
         </ion-popover>
 
@@ -624,38 +643,10 @@ export default defineComponent({
       (document.activeElement as HTMLElement)?.blur?.();
       this.showItemActions = false;
     },
-    editActiveItemArrivalDate() {
+    async saveItemEdit() {
       const item = this.activeItem;
       this.closeItemActions();
-      this.openArrivalDatePicker(item);
-    },
-    async editActiveItemQuantity() {
-      const item = this.activeItem;
-      this.closeItemActions();
-      const alert = await alertController.create({
-        header: this.$t("Edit quantity"),
-        inputs: [{
-          name: 'quantity',
-          type: 'number',
-          value: String(item.quantity ?? '')
-        }],
-        buttons: [
-          { text: this.$t("Cancel") },
-          {
-            text: this.$t("Save"),
-            handler: (data: any) => {
-              const quantity = Number(data.quantity);
-              if (!Number.isFinite(quantity)) return false;
-              return this.store.dispatch('purchaseOrder/updateItem', {
-                orderId: this.orderId,
-                orderItemSeqId: item.orderItemSeqId,
-                item: { quantity }
-              });
-            }
-          }
-        ]
-      });
-      return alert.present();
+      await this.updateItem(item);
     },
     expandReceiveRows() {
       this.showReceiveControls = !this.showReceiveControls;
@@ -707,6 +698,14 @@ export default defineComponent({
       this.activeItem = item;
       this.itemActionsEvent = event;
       this.showItemActions = true;
+      const draftKey = this.itemDraftKey(item);
+      if (!this.drafts[draftKey]) {
+        this.drafts[draftKey] = {
+          quantity: item.quantity ?? '',
+          unitPrice: item.unitPrice ?? '',
+          estimatedDeliveryDate: this.parseDate(item.estimatedDeliveryDate || this.order.estimatedDeliveryDate)?.toFormat('yyyy-MM-dd') || ''
+        };
+      }
     },
     closeActions() {
       (document.activeElement as HTMLElement)?.blur?.();
