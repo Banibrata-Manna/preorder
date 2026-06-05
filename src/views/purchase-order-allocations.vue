@@ -23,50 +23,64 @@
     </ion-header>
 
     <ion-content>
-      <ion-list>
-        <ion-item lines="none">
-          <ion-label>{{ allocations.length }} {{ $t("allocations") }}</ion-label>
-          <ion-button slot="end" fill="outline" :disabled="selected.length === 0" @click="removeSelected">
-            <ion-icon slot="start" :icon="trashOutline" />
-            {{ $t("Remove") }}
-          </ion-button>
-        </ion-item>
-        <ion-item v-if="allocations.length === 0">
-          <ion-label>{{ $t("No allocations found") }}</ion-label>
-        </ion-item>
-        <ion-card v-for="allocation in allocations" :key="`${allocation.orderId}-${allocation.orderItemSeqId}`">
+      <ion-item lines="none">
+        <ion-label>{{ allocations.length }} {{ $t("allocations") }}</ion-label>
+      </ion-item>
+
+      <ion-item v-if="allocations.length === 0">
+        <ion-label>{{ $t("No allocations found") }}</ion-label>
+      </ion-item>
+
+      <template v-for="allocation in allocations" :key="`${allocation.orderId}-${allocation.orderItemSeqId}`">
+        <!-- Order header row -->
+        <div class="list-item allocation-order-header">
           <ion-item lines="full">
-            <ion-checkbox
-              slot="start"
-              :model-value="isSelected(allocation)"
-              @ionChange="toggleAllocation(allocation, $event.detail.checked)">
-            </ion-checkbox>
             <ion-label>
-              <h2>{{ allocation.orderName || allocation.orderId }}</h2>
-              <p>{{ allocation.productId }} · {{ allocation.orderItemSeqId }}</p>
+              <h1><strong>{{ allocation.orderName || allocation.orderId }}</strong></h1>
+              <p>{{ allocation.orderId }}</p>
             </ion-label>
-            <ion-badge slot="end">{{ allocation.allocationType }}</ion-badge>
           </ion-item>
-          <ion-list>
-            <ion-item lines="none">
-              <ion-label>{{ $t("Status") }}</ion-label>
-              <ion-note slot="end">{{ allocation.itemStatusDesc || allocation.statusId }}</ion-note>
-            </ion-item>
-            <ion-item lines="none">
-              <ion-label>{{ $t("Promised date") }}</ion-label>
-              <ion-note slot="end">{{ formatDate(allocation.promisedDatetime) }}</ion-note>
-            </ion-item>
-            <ion-item lines="none">
-              <ion-label>{{ $t("Facility") }}</ion-label>
-              <ion-note slot="end">{{ allocation.facilityId || '-' }}</ion-note>
-            </ion-item>
-            <ion-item lines="none">
-              <ion-label>{{ $t("Shipping method") }}</ion-label>
-              <ion-note slot="end">{{ allocation.shipmentMethodTypeId || '-' }}</ion-note>
-            </ion-item>
-          </ion-list>
-        </ion-card>
-      </ion-list>
+          <div class="metadata ion-padding-end">
+            <ion-note>{{ $t("Created on") }} {{ formatDate(allocation.orderDate) }}</ion-note>
+            <ion-badge :color="orderStatusColor(allocation)">{{ allocation.orderStatusId }}</ion-badge>
+          </div>
+        </div>
+
+        <!-- Item row -->
+        <div class="list-item allocation-item-row">
+          <ion-item lines="full">
+            <ion-thumbnail slot="start">
+              <DxpShopifyImg :src="productImage(allocation)" size="small" />
+            </ion-thumbnail>
+            <ion-label>
+              <h2>{{ itemPrimary(allocation) }}</h2>
+              <p>{{ itemSecondary(allocation) }}</p>
+            </ion-label>
+          </ion-item>
+          <div class="tablet ion-text-center">
+            <ion-chip outline>
+              <ion-icon :icon="allocation.allocationType === 'Linked' ? calendarOutline : businessOutline" />
+              <ion-label>{{ allocation.allocationType === 'Linked' ? formatDate(allocation.promisedDatetime) : allocation.facilityId }}</ion-label>
+            </ion-chip>
+            <ion-label>
+              <p>{{ allocation.allocationType === 'Linked' ? $t("promise date") : $t("parking") }}</p>
+            </ion-label>
+          </div>
+          <div class="tablet ion-text-center">
+            <ion-button v-if="allocation.allocationType === 'Linked'" fill="clear" @click="unlinkAllocation(allocation)">
+              <ion-icon slot="start" :icon="linkOutline" />
+              {{ $t("Unlink") }}
+            </ion-button>
+            <ion-button v-else fill="clear" color="primary" @click="linkAllocation(allocation)">
+              <ion-icon slot="start" :icon="linkOutline" />
+              {{ $t("Link") }}
+            </ion-button>
+          </div>
+          <div class="ion-text-center ion-padding-end">
+            <ion-badge :color="itemStatusColor(allocation)">{{ allocation.itemStatusId }}</ion-badge>
+          </div>
+        </div>
+      </template>
     </ion-content>
   </ion-page>
 </template>
@@ -78,47 +92,49 @@ import {
   IonBadge,
   IonButton,
   IonButtons,
-  IonCard,
-  IonCheckbox,
+  IonChip,
   IonContent,
   IonHeader,
   IonIcon,
   IonItem,
   IonLabel,
-  IonList,
   IonNote,
   IonPage,
   IonSegment,
   IonSegmentButton,
+  IonThumbnail,
   IonTitle,
+  IonText,
   IonToolbar
 } from "@ionic/vue";
-import { trashOutline } from "ionicons/icons";
+import { businessOutline, calendarOutline, linkOutline } from "ionicons/icons";
 import { DateTime } from "luxon";
 import { defineComponent } from "vue";
 import { mapGetters } from "vuex";
 import { useRoute } from "vue-router";
 import { useStore } from "@/store";
+import { DxpShopifyImg, getProductIdentificationValue, useProductIdentificationStore } from "@hotwax/dxp-components";
+import { PurchaseOrderService } from "@/services/PurchaseOrderService";
 
 export default defineComponent({
   name: "purchase-order-allocations",
   components: {
+    DxpShopifyImg,
     IonBackButton,
     IonBadge,
     IonButton,
     IonButtons,
-    IonCard,
-    IonCheckbox,
+    IonChip,
     IonContent,
     IonHeader,
     IonIcon,
     IonItem,
     IonLabel,
-    IonList,
     IonNote,
     IonPage,
     IonSegment,
     IonSegmentButton,
+    IonThumbnail,
     IonTitle,
     IonToolbar
   },
@@ -126,7 +142,8 @@ export default defineComponent({
     ...mapGetters({
       allocations: 'purchaseOrder/getAllocations',
       allocationView: 'purchaseOrder/getAllocationView',
-      selected: 'purchaseOrder/getSelectedAllocations'
+      selected: 'purchaseOrder/getSelectedAllocations',
+      getProduct: 'product/getProduct'
     }),
     requestedAllocationView(): string {
       const queryValue = this.queryValue(this.route.query.allocationView);
@@ -148,41 +165,80 @@ export default defineComponent({
       });
     },
     changeView(view: string) {
-      this.store.dispatch('purchaseOrder/updateSelectedAllocations', { items: [] });
       this.fetchAllocations(String(view || 'linked'));
     },
     queryValue(value: any) {
       const queryValue = Array.isArray(value) ? value.find(Boolean) : value;
       return queryValue ? String(queryValue) : '';
     },
-    isSelected(allocation: any) {
-      return this.selected.some((item: any) => item.orderId === allocation.orderId && item.orderItemSeqId === allocation.orderItemSeqId);
-    },
-    toggleAllocation(allocation: any, checked: boolean) {
-      const next = checked
-        ? this.selected.concat(allocation)
-        : this.selected.filter((item: any) => item.orderId !== allocation.orderId || item.orderItemSeqId !== allocation.orderItemSeqId);
-      this.store.dispatch('purchaseOrder/updateSelectedAllocations', { items: next });
-    },
-    parseDate(value: string) {
+    parseDate(value: any) {
       if (!value || ['null', 'undefined'].includes(String(value))) return null;
+      if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+        const d = DateTime.fromMillis(Number(value));
+        return d.isValid ? d : null;
+      }
       const isoDate = DateTime.fromISO(String(value));
       const sqlDate = DateTime.fromSQL(String(value));
-      const parsedDate = isoDate.isValid ? isoDate : sqlDate;
-      return parsedDate.isValid ? parsedDate : null;
+      const parsed = isoDate.isValid ? isoDate : sqlDate;
+      return parsed.isValid ? parsed : null;
     },
-    formatDate(value: string) {
-      return this.parseDate(value)?.toFormat('yyyy-MM-dd') || '-';
+    formatDate(value: any) {
+      return this.parseDate(value)?.toFormat('d LLL yyyy') || '-';
     },
-    async removeSelected() {
+    productImage(allocation: any) {
+      const cached = this.getProduct(allocation.productId) || {};
+      return cached.mainImageUrl || cached.mediumImageUrl || '';
+    },
+    itemPrimary(allocation: any) {
+      const cached = this.getProduct(allocation.productId) || {};
+      return getProductIdentificationValue(this.productIdentificationPref.primaryId, cached) || cached.productName || allocation.productId;
+    },
+    itemSecondary(allocation: any) {
+      const cached = this.getProduct(allocation.productId) || {};
+      return getProductIdentificationValue(this.productIdentificationPref.secondaryId, cached) || cached.internalName || allocation.orderItemSeqId;
+    },
+    orderStatusColor(allocation: any) {
+      const s = String(allocation.orderStatusId || '');
+      if (s.includes('APPROVED')) return 'success';
+      if (s.includes('CANCELLED')) return 'danger';
+      if (s.includes('COMPLETED')) return 'medium';
+      return 'primary';
+    },
+    itemStatusColor(allocation: any) {
+      const s = String(allocation.itemStatusId || '');
+      if (s.includes('APPROVED')) return 'success';
+      if (s.includes('CANCELLED')) return 'danger';
+      if (s.includes('COMPLETED')) return 'medium';
+      return 'primary';
+    },
+    async linkAllocation(allocation: any) {
+      try {
+        await PurchaseOrderService.assignPOItemsToSOItems(this.orderId, allocation.productId)
+        await this.fetchAllocations(this.allocationView)
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async unlinkAllocation(allocation: any) {
       const alert = await alertController.create({
-        header: this.$t("Remove allocations"),
-        message: this.$t("Are you sure you want to remove the selected purchase order allocations?"),
+        header: this.$t("Unlink allocation"),
+        message: this.$t("Are you sure you want to unlink this sales order from the purchase order?"),
         buttons: [
           { text: this.$t("Cancel") },
           {
             text: this.$t("Confirm"),
-            handler: () => this.store.dispatch('purchaseOrder/removeAllocations', { orderId: this.orderId })
+            handler: async () => {
+              try {
+                await PurchaseOrderService.deletePOAllocation(
+                  this.orderId,
+                  allocation.orderId,
+                  allocation.orderItemSeqId
+                )
+                await this.fetchAllocations(this.allocationView)
+              } catch (error) {
+                console.error(error)
+              }
+            }
           }
         ]
       });
@@ -192,12 +248,30 @@ export default defineComponent({
   setup() {
     const route = useRoute();
     const store = useStore();
+    const productIdentificationStore = useProductIdentificationStore();
+    const productIdentificationPref = productIdentificationStore.getProductIdentificationPref;
     return {
+      businessOutline,
+      calendarOutline,
+      linkOutline,
       orderId: route.params.orderId as string,
+      productIdentificationPref,
       route,
-      store,
-      trashOutline
+      store
     };
   }
 });
 </script>
+
+<style scoped>
+.allocation-order-header {
+  --columns-tablet: 2;
+  --columns-desktop: 2;
+}
+
+.allocation-item-row {
+  --columns-tablet: 3;
+  --columns-desktop: 4;
+  padding-inline-start: 16px;
+}
+</style>

@@ -55,7 +55,7 @@ const fetchPOAllocations = async (orderId: string, productId?: string): Promise<
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${store.getters['user/getUserToken']}`
     },
-    params: { orderTypeId: 'SALES_ORDER', correspondingPoId: orderId, productId }
+    params: { productId }
   });
 }
 
@@ -85,6 +85,32 @@ const addOrderItem = async (payload: any): Promise<any> => {
   });
 }
 
+const deletePOAllocation = async (poOrderId: string, soOrderId: string, soOrderItemSeqId: string): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/orders/${soOrderId}/items/${soOrderItemSeqId}/poAllocations`,
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { orderId: soOrderId, orderItemSeqId: soOrderItemSeqId }
+  });
+}
+
+const assignPOItemsToSOItems = async (orderId: string, productId: string): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/assign`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { productId }
+  });
+}
+
 export const PurchaseOrderService = {
   fetchPurchaseOrders,
   fetchPurchaseOrder,
@@ -92,5 +118,7 @@ export const PurchaseOrderService = {
   fetchFacilityContactMechs,
   fetchPOAllocations,
   fetchPOSuggestions,
-  addOrderItem
+  addOrderItem,
+  deletePOAllocation,
+  assignPOItemsToSOItems
 }

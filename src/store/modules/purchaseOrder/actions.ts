@@ -336,7 +336,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
       if (allocationView === 'linked' || allocationView === 'all') {
         const resp = await PurchaseOrderService.fetchPOAllocations(orderId, productId || undefined)
         if (!hasError(resp)) {
-          linked = (resp.data as any[] || []).map((item: any) => ({ ...item, allocationType: 'Linked' }))
+          linked = (resp.data?.allocations || []).map((item: any) => ({ ...item, allocationType: 'Linked' }))
         }
       }
 
