@@ -158,6 +158,19 @@ const deletePOAllocation = async (poOrderId: string, soOrderId: string, soOrderI
   });
 }
 
+const receiveOrderItems = async (orderId: string, facilityId: string, items: any[]): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/receive`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { facilityId, items }
+  });
+}
+
 const assignPOItemsToSOItems = async (orderId: string, productId: string, salesOrderId?: string): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
@@ -179,6 +192,7 @@ export const PurchaseOrderService = {
   fetchPOAllocations,
   fetchPOSuggestions,
   addOrderItem,
+  receiveOrderItems,
   changeOrderStatus,
   changeOrderItemStatus,
   updateOrderItem,

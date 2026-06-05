@@ -7,21 +7,12 @@ import * as types from './mutation-types'
 import emitter from '@/event-bus'
 import { PurchaseOrderService } from '@/services/PurchaseOrderService'
 import { DateTime } from 'luxon'
-import { clone, purchaseOrderFixtures } from './mockData'
+import { purchaseOrderFixtures } from './mockData'
 
 const fixtureAllocations = purchaseOrderFixtures.allocations
-let fixtureOrders = purchaseOrderFixtures.orders
 
 const ok = (data: any = {}) => Promise.resolve({ status: 200, data })
 
-
-const findOrder = (orderId: string) => fixtureOrders.find((order: any) => order.orderId === orderId) || fixtureOrders[0]
-
-const findItem = (order: any, orderItemSeqId: string) => (order.items || []).find((item: any) => item.orderItemSeqId === orderItemSeqId)
-
-const syncCurrent = (commit: any, orderId: string) => {
-  commit(types.PURCHASE_ORDER_CURRENT_UPDATED, { order: clone(findOrder(orderId)) })
-}
 
 const toastAndOk = (message: string, data: any = {}) => {
   showToast(translate(message))
@@ -372,14 +363,17 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     return toastAndOk('Sales orders assigned')
   },
 
-  async receiveItems ({ commit }, { orderId, items }) {
-    const order = findOrder(orderId)
-    items.forEach((receivedItem: any) => {
-      const item = findItem(order, receivedItem.orderItemSeqId)
-      if (item) item.receivedQuantity = Number(item.receivedQuantity || 0) + Number(receivedItem.quantityAccepted || 0)
-    })
-    syncCurrent(commit, orderId)
-    return toastAndOk('Items received')
+  async receiveItems ({ dispatch }, { orderId, facilityId, items }) {
+    try {
+      const resp = await PurchaseOrderService.receiveOrderItems(orderId, facilityId, items)
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('Items received'))
+      await dispatch('fetchPurchaseOrder', { orderId })
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+    }
   },
 
   async fetchReceipts ({ commit }) {

@@ -255,7 +255,7 @@
           <ion-list v-if="showReceiveControls && row.type === 'item'" class="purchase-order-receive-item">
             <ion-item>
               <ion-label>{{ $t("Receive") }}</ion-label>
-              <ion-input slot="end" type="number" :placeholder="$t('Quantity')" :value="receiveDraft[itemDraftKey(row)]" @ionInput="receiveDraft[itemDraftKey(row)] = $event.detail.value" />
+              <ion-input slot="end" type="number" :placeholder="$t('Quantity')" :value="receiveDraft[itemDraftKey(row)]" @ionInput="setReceiveDraft(itemDraftKey(row), $event.detail.value)" />
               <ion-button slot="end" fill="clear" @click="receiveItem(row)">
                 <ion-icon slot="icon-only" :icon="downloadOutline" />
               </ion-button>
@@ -650,6 +650,9 @@ export default defineComponent({
     },
     expandReceiveRows() {
       this.showReceiveControls = !this.showReceiveControls;
+    },
+    setReceiveDraft(key: string, value: any) {
+      this.receiveDraft = { ...this.receiveDraft, [key]: value };
     },
     firstDistinct(...values: any[]) {
       const uniqueValues = values.filter((value) => value !== undefined && value !== null && value !== '');
