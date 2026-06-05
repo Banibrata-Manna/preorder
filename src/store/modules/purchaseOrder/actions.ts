@@ -87,7 +87,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
         viewIndex: pageIndex,
         groupByField,
         groupLimit: 200,
-        queryString: query.keyword || '',
+        queryString: query.keyword ? `*${query.keyword}*` : '',
         queryFields: 'orderId orderName productId productName internalName parentProductId parentProductName search_orderIdentifications',
         sort: 'estimatedDeliveryDate asc',
         filters: buildFilters(query)
