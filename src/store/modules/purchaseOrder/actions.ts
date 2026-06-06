@@ -6,7 +6,6 @@ import { translate } from '@/i18n'
 import * as types from './mutation-types'
 import emitter from '@/event-bus'
 import { PurchaseOrderService } from '@/services/PurchaseOrderService'
-import { DateTime } from 'luxon'
 import { purchaseOrderFixtures } from './mockData'
 
 const fixtureAllocations = purchaseOrderFixtures.allocations
@@ -238,7 +237,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
         disableResetGrandTotal: true
       }
       if (item.unitPrice) payload.unitPrice = item.unitPrice
-      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
+      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = item.estimatedDeliveryDate
       if (item.isNewProduct) payload.isNewProduct = item.isNewProduct
 
       const resp = await PurchaseOrderService.addOrderItem(payload)
@@ -261,7 +260,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
       }
       if (item.unitPrice !== undefined) payload.unitPrice = item.unitPrice
       if (item.availableToPromise !== undefined) payload.availableToPromise = item.availableToPromise
-      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = DateTime.fromSQL(item.estimatedDeliveryDate).toMillis()
+      if (item.estimatedDeliveryDate) payload.estimatedDeliveryDate = item.estimatedDeliveryDate
 
       const resp = await PurchaseOrderService.updateOrderItem(orderId, orderItemSeqId, payload)
       if (hasError(resp)) throw resp.data
