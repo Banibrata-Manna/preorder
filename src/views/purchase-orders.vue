@@ -13,9 +13,6 @@
           <ion-button @click="openFilters($event)">
             <ion-icon slot="icon-only" :icon="filterOutline" />
           </ion-button>
-          <ion-button @click="navigateTo('/purchase-orders/new')">
-            <ion-icon slot="icon-only" :icon="add" />
-          </ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
@@ -352,7 +349,7 @@ import {
   IonTitle,
   IonToolbar
 } from "@ionic/vue";
-import { add, arrowDownOutline, arrowUpOutline, chevronDownOutline, documentTextOutline, downloadOutline, filterOutline, swapVerticalOutline } from "ionicons/icons";
+import { arrowDownOutline, arrowUpOutline, chevronDownOutline, documentTextOutline, downloadOutline, filterOutline, swapVerticalOutline } from "ionicons/icons";
 import { DateTime } from "luxon";
 import { defineComponent } from "vue";
 import { mapGetters } from "vuex";
@@ -481,7 +478,7 @@ export default defineComponent({
       estimatedDeliveryDateFrom: this.query.estimatedDeliveryDateFrom,
       estimatedDeliveryDateTo: this.query.estimatedDeliveryDateTo
     };
-    if (!this.query.hasUpdated) this.search();
+    this.search();
   },
   methods: {
     async search(pageIndex = 0) {
@@ -767,7 +764,7 @@ export default defineComponent({
     const productIdentificationStore = useProductIdentificationStore();
     const productIdentificationPref = productIdentificationStore.getProductIdentificationPref;
     return {
-      add,
+
       arrowDownOutline,
       arrowUpOutline,
       chevronDownOutline,

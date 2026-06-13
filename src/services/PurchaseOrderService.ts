@@ -171,6 +171,19 @@ const receiveOrderItems = async (orderId: string, facilityId: string, items: any
   });
 }
 
+const indexOrder = async (orderId: string): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: 'admin/solr/indexOrder',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { orderId }
+  });
+}
+
 const assignPOItemsToSOItems = async (orderId: string, productId: string, salesOrderId?: string): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
@@ -199,5 +212,6 @@ export const PurchaseOrderService = {
   createPurchaseOrder,
   fetchOrganization,
   deletePOAllocation,
-  assignPOItemsToSOItems
+  assignPOItemsToSOItems,
+  indexOrder
 }

@@ -8,7 +8,7 @@ import Audit from '../views/audit.vue'
 import PurchaseOrders from '../views/purchase-orders.vue'
 import PurchaseOrderDetail from '../views/purchase-order-detail.vue'
 import PurchaseOrderAllocations from '../views/purchase-order-allocations.vue'
-import PurchaseOrderCreate from '../views/purchase-order-create.vue'
+// import PurchaseOrderCreate from '../views/purchase-order-create.vue'
 import Settings from '../views/settings.vue'
 import store from '@/store';
 import { DxpLogin, useAuthStore } from '@hotwax/dxp-components';
@@ -91,15 +91,15 @@ const routes: Array<RouteRecordRaw> = [
       permissionId: "APP_PURCHASE_ORDERS_VIEW"
     }
   },
-  {
-    path: '/purchase-orders/new',
-    name: 'PurchaseOrderCreate',
-    component: PurchaseOrderCreate,
-    beforeEnter: authGuard,
-    meta: {
-      permissionId: "APP_PURCHASE_ORDERS_VIEW"
-    }
-  },
+  // {
+  //   path: '/purchase-orders/new',
+  //   name: 'PurchaseOrderCreate',
+  //   component: PurchaseOrderCreate,
+  //   beforeEnter: authGuard,
+  //   meta: {
+  //     permissionId: "APP_PURCHASE_ORDERS_VIEW"
+  //   }
+  // },
   {
     path: '/purchase-orders/:orderId',
     name: 'PurchaseOrderDetail',

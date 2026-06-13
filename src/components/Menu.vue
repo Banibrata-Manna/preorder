@@ -84,7 +84,7 @@ export default defineComponent({
         }
       },
       {
-        title: "Purchase orders",
+        title: "Purchase Orders",
         url: "/purchase-orders",
         childRoutes: ["/purchase-orders/"],
         iosIcon: receiptOutline,

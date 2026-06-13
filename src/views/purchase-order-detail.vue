@@ -5,7 +5,7 @@
         <ion-buttons slot="start">
           <ion-back-button default-href="/purchase-orders"></ion-back-button>
         </ion-buttons>
-        <ion-title>{{ $t("Purchase order details") }}</ion-title>
+        <ion-title>{{ $t("Purchase Order Details") }}</ion-title>
         <ion-buttons slot="end">
           <ion-button @click="expandReceiveRows" :disabled="items.length === 0">{{ $t("Receive") }}</ion-button>
           <ion-button @click="load">
@@ -23,7 +23,7 @@
           <p>{{ purchaseOrderSubtitle }}</p>
         </ion-label>
         <ion-badge slot="end" :color="statusColor(order)">{{ statusLabel(order) }}</ion-badge>
-        <ion-button slot="end" fill="clear" @click="openActions($event)">
+        <ion-button v-if="order.statusId !== 'ORDER_CANCELLED'" slot="end" fill="clear" @click="openActions($event)">
           <ion-icon slot="icon-only" :icon="chevronDownOutline" />
         </ion-button>
       </ion-item>
@@ -112,7 +112,7 @@
         <ion-label>
           <h1>{{ $t("Items") }}</h1>
         </ion-label>
-        <ion-button slot="end" fill="outline" @click="showAddItem = !showAddItem">
+        <ion-button v-if="order.statusId !== 'ORDER_CANCELLED'" slot="end" fill="outline" @click="showAddItem = !showAddItem">
           <ion-icon slot="start" :icon="add" />
           {{ $t("Add items") }}
         </ion-button>
@@ -234,7 +234,7 @@
               </ion-label>
             </div>
             <div class="tablet ion-text-center">
-              <ion-chip :outline="true" button @click="openArrivalDatePicker(row)">
+              <ion-chip :outline="true" :button="row.itemStatusId !== 'ITEM_CANCELLED'" :disabled="row.itemStatusId === 'ITEM_CANCELLED'" @click="row.itemStatusId !== 'ITEM_CANCELLED' && openArrivalDatePicker(row)">
                 <ion-icon :icon="calendarOutline" />
                 <ion-label>{{ formatDate(row.estimatedDeliveryDate || order.estimatedDeliveryDate) }}</ion-label>
               </ion-chip>
@@ -246,7 +246,7 @@
               <ion-badge :color="statusColor(row)">{{ statusLabel(row) }}</ion-badge>
             </div>
             <div class="ion-text-center ion-padding-end">
-              <ion-button fill="clear" @click="openItemActions($event, row)">
+              <ion-button fill="clear" @click="openItemActions($event, row)" :disabled="row.itemStatusId === 'ITEM_CANCELLED'">
                 <ion-icon slot="icon-only" :icon="ellipsisVerticalOutline" />
               </ion-button>
             </div>
@@ -268,29 +268,33 @@
             <ion-list-header>
               <ion-label>{{ itemPrimary(activeItem) }}</ion-label>
             </ion-list-header>
-            <ion-item>
-              <ion-input type="number" :label="$t('Quantity')" label-placement="floating" min="1"
-                :value="draftValue(activeItem, 'quantity')"
-                @ionInput="setDraft(activeItem, 'quantity', $event.detail.value)" />
-            </ion-item>
-            <ion-item>
-              <ion-input type="number" :label="$t('Unit price')" label-placement="floating" min="0"
-                :value="draftValue(activeItem, 'unitPrice')"
-                @ionInput="setDraft(activeItem, 'unitPrice', $event.detail.value)" />
-            </ion-item>
-            <ion-item>
-              <ion-input type="date" :label="$t('Arrival date')" label-placement="floating"
-                :value="draftDate(activeItem)"
-                @ionChange="setDraft(activeItem, 'estimatedDeliveryDate', $event.detail.value)" />
-            </ion-item>
-            <ion-item lines="none">
-              <ion-button fill="clear" slot="end" @click="saveItemEdit">{{ $t("Save") }}</ion-button>
-              <ion-button fill="clear" slot="end" @click="closeItemActions">{{ $t("Cancel") }}</ion-button>
-            </ion-item>
+            <template v-if="activeItem.itemStatusId !== 'ITEM_CANCELLED'">
+              <ion-item>
+                <ion-input type="number" :label="$t('Quantity')" label-placement="floating" min="1"
+                  :value="draftValue(activeItem, 'quantity')"
+                  @ionInput="setDraft(activeItem, 'quantity', $event.detail.value)" />
+              </ion-item>
+              <ion-item>
+                <ion-input type="number" :label="$t('Unit price')" label-placement="floating" min="0"
+                  :value="draftValue(activeItem, 'unitPrice')"
+                  @ionInput="setDraft(activeItem, 'unitPrice', $event.detail.value)" />
+              </ion-item>
+              <ion-item>
+                <ion-input type="date" :label="$t('Arrival date')" label-placement="floating"
+                  :value="draftDate(activeItem)"
+                  @ionChange="setDraft(activeItem, 'estimatedDeliveryDate', $event.detail.value)" />
+              </ion-item>
+              <ion-item lines="none">
+                <ion-button fill="clear" slot="end" @click="saveItemEdit">{{ $t("Save") }}</ion-button>
+                <ion-button fill="clear" slot="end" @click="closeItemActions">{{ $t("Cancel") }}</ion-button>
+              </ion-item>
+            </template>
             <template v-if="activeItem.itemStatusId === 'ITEM_APPROVED'">
               <ion-item button @click="viewActiveItemAllocations('suggested')">{{ $t("Allocate pre-orders") }}</ion-item>
               <ion-item button @click="viewActiveItemAllocations('linked')">{{ $t("View allocations") }}</ion-item>
-              <ion-item lines="none" button color="danger" @click="confirmRemoveActiveItem">{{ $t("Remove item") }}</ion-item>
+            </template>
+            <template v-if="['ITEM_CREATED', 'ITEM_APPROVED'].includes(activeItem.itemStatusId)">
+              <ion-item lines="none" button color="danger" @click="confirmRemoveActiveItem">{{ $t("Cancel item") }}</ion-item>
             </template>
           </ion-list>
         </ion-popover>
@@ -543,7 +547,7 @@ export default defineComponent({
           key: 'items',
           icon: shirtOutline,
           title: `${this.quantity(this.totalReceived)} ${this.$t("received")}`,
-          description: `${this.quantity(this.items.length)} ${this.$t("items")}`,
+          description: `${this.quantity(this.activeItems.length)} ${this.$t("items")}`,
           date: this.formatDateTime(this.order.orderDate)
         },
         {
@@ -555,14 +559,17 @@ export default defineComponent({
         }
       ];
     },
+    activeItems(): any[] {
+      return this.items.filter((item: any) => item.itemStatusId !== 'ITEM_CANCELLED');
+    },
     totalAvailable(): number {
-      return this.items.reduce((total: number, item: any) => total + this.toNumber(this.availableQuantity(item)), 0);
+      return this.activeItems.reduce((total: number, item: any) => total + this.toNumber(this.availableQuantity(item)), 0);
     },
     totalQuantity(): number {
-      return this.items.reduce((total: number, item: any) => total + Number(item.quantity || 0), 0);
+      return this.activeItems.reduce((total: number, item: any) => total + Number(item.quantity || 0), 0);
     },
     totalReceived(): number {
-      return this.items.reduce((total: number, item: any) => total + this.toNumber(this.receivedQuantity(item)), 0);
+      return this.activeItems.reduce((total: number, item: any) => total + this.toNumber(this.receivedQuantity(item)), 0);
     },
     variantCount(): number {
       const productKeys = new Set(this.items.map((item: any) => item.productId || item.sku || item.orderItemSeqId).filter(Boolean));
@@ -875,12 +882,12 @@ export default defineComponent({
       const item = this.activeItem;
       this.closeItemActions();
       const alert = await alertController.create({
-        header: this.$t("Remove item"),
-        message: this.$t("Are you sure you want to remove this purchase order item?"),
+        header: this.$t("Cancel item"),
+        message: this.$t("Are you sure you want to cancel this purchase order item?"),
         buttons: [
           { text: this.$t("Cancel") },
           {
-            text: this.$t("Remove"),
+            text: this.$t("Cancel item"),
             handler: () => this.store.dispatch('purchaseOrder/deleteItem', {
               orderId: this.orderId,
               orderItemSeqId: item.orderItemSeqId

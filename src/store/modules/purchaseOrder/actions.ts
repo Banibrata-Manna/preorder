@@ -222,6 +222,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Purchase order status updated'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
@@ -245,6 +246,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Item added'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
@@ -254,7 +256,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
   async updateItem ({ dispatch }, { orderId, orderItemSeqId, item }) {
     try {
       const payload: any = {}
-      if (item.quantity !== undefined) { 
+      if (item.quantity !== undefined) {
         payload.quantity = item.quantity
         payload.availableToPromise = item.quantity
       }
@@ -267,6 +269,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Item updated'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
@@ -280,6 +283,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Item removed'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
@@ -305,6 +309,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Item status updated'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
@@ -369,6 +374,7 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
 
       showToast(translate('Items received'))
       await dispatch('fetchPurchaseOrder', { orderId })
+      PurchaseOrderService.indexOrder(orderId).catch((error: any) => console.error('Failed to index order', error))
     } catch (error) {
       console.error(error)
       showToast(translate('Something went wrong'))
