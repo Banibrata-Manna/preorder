@@ -30,6 +30,27 @@ const actions: ActionTree<UtilState, RootState> = {
       console.error(err)
     }
   },
+  async getOrderStatusDesc ({ commit, state }) {
+    if (Object.keys(state.statusDesc).some((id) => id.startsWith('ORDER_') || id.startsWith('ITEM_'))) return
+
+    try {
+      const resp = await UtilService.getServiceStatusDesc({
+        inputFields: {
+          statusTypeId: ['ORDER_STATUS', 'ORDER_ITEM_STATUS'],
+          statusTypeId_op: 'in'
+        },
+        entityName: 'StatusItem',
+        fieldList: ['statusId', 'description'],
+        noConditionFind: 'Y',
+        viewSize: 50
+      })
+      if (resp.status === 200 && !hasError(resp) && resp.data.count) {
+        commit(types.UTIL_SERVICE_STATUS_DESC_UPDATED, resp.data.docs)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  },
   /**
     Get reserve inventory config
    */

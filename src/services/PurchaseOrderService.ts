@@ -33,7 +33,20 @@ const fetchPurchaseOrderReceipts = async (orderId: string): Promise<any> => {
   });
 }
 
-const fetchFacilityContactMechs = async (params: any): Promise<any> => {
+const fetchOrderStatusHistory = async (orderId: string, params?: any): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/orders/${orderId}/status`,
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    params
+  });
+}
+
+const fetchFacilityContactMechs = async (params?: any): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
     url: 'oms/facilityContactMechs',
@@ -213,5 +226,6 @@ export const PurchaseOrderService = {
   fetchOrganization,
   deletePOAllocation,
   assignPOItemsToSOItems,
-  indexOrder
+  indexOrder,
+  fetchOrderStatusHistory
 }

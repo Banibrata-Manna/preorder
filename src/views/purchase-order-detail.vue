@@ -7,7 +7,10 @@
         </ion-buttons>
         <ion-title>{{ $t("Purchase Order Details") }}</ion-title>
         <ion-buttons slot="end">
-          <ion-button @click="expandReceiveRows" :disabled="items.length === 0">{{ $t("Receive") }}</ion-button>
+          <ion-button v-if="receivingAppUrl" @click="redirectToReceivingApp">
+            <ion-icon slot="start" :icon="openOutline" />
+            {{ $t("Receive") }}
+          </ion-button>
           <ion-button @click="load">
             <ion-icon slot="icon-only" :icon="refreshOutline" />
           </ion-button>
@@ -23,7 +26,7 @@
           <p>{{ purchaseOrderSubtitle }}</p>
         </ion-label>
         <ion-badge slot="end" :color="statusColor(order)">{{ statusLabel(order) }}</ion-badge>
-        <ion-button v-if="order.statusId !== 'ORDER_CANCELLED'" slot="end" fill="clear" @click="openActions($event)">
+        <ion-button v-if="!isOrderLocked" slot="end" fill="clear" @click="openActions($event)">
           <ion-icon slot="icon-only" :icon="chevronDownOutline" />
         </ion-button>
       </ion-item>
@@ -96,13 +99,22 @@
           <ion-list-header>
             <ion-label>{{ $t("Timeline") }}</ion-label>
           </ion-list-header>
-          <ion-item v-for="event in timelineEvents" :key="event.key">
-            <ion-icon slot="start" :icon="event.icon" />
+          <ion-item v-if="isFetchingTimeline">
+            <ion-spinner name="crescent" />
+          </ion-item>
+          <ion-item v-else-if="!timelineEvents.length">
+            <ion-label color="medium">{{ $t("No timeline events") }}</ion-label>
+          </ion-item>
+          <ion-item v-for="(event, index) in timelineEvents" :key="index" v-else>
+            <ion-icon slot="start"
+              :icon="event.eventType === 'RECEIPT' ? downloadOutline : ticketOutline"
+              :color="event.eventType ? 'primary' : 'medium'" />
             <ion-label>
-              <h2>{{ event.title }}</h2>
-              <p>{{ event.description }}</p>
+              <p class="overline" v-if="event.timeDiff">{{ event.timeDiff }}</p>
+              <h2>{{ event.statusDesc }}</h2>
+              <p v-if="event.eventType === 'RECEIPT'">{{ $t("Received by") }} {{ event.receivedByUserLoginId }}</p>
             </ion-label>
-            <ion-note slot="end">{{ event.date }}</ion-note>
+            <ion-note slot="end">{{ formatDateTime(event.statusDatetime) }}</ion-note>
           </ion-item>
         </ion-list>
       </section>
@@ -112,7 +124,7 @@
         <ion-label>
           <h1>{{ $t("Items") }}</h1>
         </ion-label>
-        <ion-button v-if="order.statusId !== 'ORDER_CANCELLED'" slot="end" fill="outline" @click="showAddItem = !showAddItem">
+        <ion-button v-if="!isOrderLocked" slot="end" fill="outline" @click="showAddItem = !showAddItem">
           <ion-icon slot="start" :icon="add" />
           {{ $t("Add items") }}
         </ion-button>
@@ -234,7 +246,7 @@
               </ion-label>
             </div>
             <div class="tablet ion-text-center">
-              <ion-chip :outline="true" :button="row.itemStatusId !== 'ITEM_CANCELLED'" :disabled="row.itemStatusId === 'ITEM_CANCELLED'" @click="row.itemStatusId !== 'ITEM_CANCELLED' && openArrivalDatePicker(row)">
+              <ion-chip :outline="true" :button="!isOrderLocked && row.itemStatusId !== 'ITEM_CANCELLED'" :disabled="isOrderLocked || row.itemStatusId === 'ITEM_CANCELLED'" @click="!isOrderLocked && row.itemStatusId !== 'ITEM_CANCELLED' && openArrivalDatePicker(row)">
                 <ion-icon :icon="calendarOutline" />
                 <ion-label>{{ formatDate(row.estimatedDeliveryDate || order.estimatedDeliveryDate) }}</ion-label>
               </ion-chip>
@@ -246,21 +258,12 @@
               <ion-badge :color="statusColor(row)">{{ statusLabel(row) }}</ion-badge>
             </div>
             <div class="ion-text-center ion-padding-end">
-              <ion-button fill="clear" @click="openItemActions($event, row)" :disabled="row.itemStatusId === 'ITEM_CANCELLED'">
+              <ion-button fill="clear" @click="openItemActions($event, row)" :disabled="isOrderLocked || row.itemStatusId === 'ITEM_CANCELLED'">
                 <ion-icon slot="icon-only" :icon="ellipsisVerticalOutline" />
               </ion-button>
             </div>
           </div>
 
-          <ion-list v-if="showReceiveControls && row.type === 'item'" class="purchase-order-receive-item">
-            <ion-item>
-              <ion-label>{{ $t("Receive") }}</ion-label>
-              <ion-input slot="end" type="number" :placeholder="$t('Quantity')" :value="receiveDraft[itemDraftKey(row)]" @ionInput="setReceiveDraft(itemDraftKey(row), $event.detail.value)" />
-              <ion-button slot="end" fill="clear" @click="receiveItem(row)">
-                <ion-icon slot="icon-only" :icon="downloadOutline" />
-              </ion-button>
-            </ion-item>
-          </ion-list>
         </template>
 
         <ion-popover :is-open="showItemActions" :event="itemActionsEvent" @didDismiss="closeItemActions">
@@ -360,6 +363,7 @@ import {
   ellipsisVerticalOutline,
   fitnessOutline,
   gitMergeOutline,
+  openOutline,
   refreshOutline,
   searchOutline,
   shirtOutline,
@@ -373,6 +377,7 @@ import { useStore } from "@/store";
 import { DxpShopifyImg } from "@hotwax/dxp-components";
 import { ProductService } from "@/services/ProductService";
 import { hasError } from "@/utils";
+import { useAuthStore } from "@hotwax/dxp-components";
 
 export default defineComponent({
   name: "purchase-order-detail",
@@ -410,12 +415,10 @@ export default defineComponent({
       arrivalDateItem: {} as any,
       drafts: {} as any,
       itemActionsEvent: undefined as Event | undefined,
-      receiveDraft: {} as any,
       showActions: false,
       showArrivalDatePicker: false,
       showAddItem: false,
       showItemActions: false,
-      showReceiveControls: false,
       productSearchQuery: '',
       isSearchingProduct: false,
       searchedProduct: {} as any,
@@ -424,7 +427,9 @@ export default defineComponent({
         unitPrice: 0,
         estimatedDeliveryDate: '',
         isNewProduct: false
-      }
+      },
+      rawTimeline: [] as any[],
+      isFetchingTimeline: false
     }
   },
   computed: {
@@ -433,7 +438,9 @@ export default defineComponent({
       items: 'purchaseOrder/getItems',
       shipGroups: 'purchaseOrder/getShipGroups',
       allocations: 'purchaseOrder/getAllocations',
-      getProduct: 'product/getProduct'
+      getProduct: 'product/getProduct',
+      getStatusDesc: 'util/getStatusDesc',
+      receipts: 'purchaseOrder/getReceipts'
     }),
     enrichedItems(): any[] {
       return this.items.map((item: any) => {
@@ -535,29 +542,93 @@ export default defineComponent({
       ].filter(Boolean);
     },
     timelineEvents(): any[] {
-      return [
-        {
-          key: 'status',
-          icon: ticketOutline,
-          title: this.statusLabel(this.order),
-          description: this.$t("Status"),
-          date: this.formatDateTime(this.order.lastUpdatedStamp || this.order.statusDatetime || this.order.orderDate)
-        },
-        {
-          key: 'items',
-          icon: shirtOutline,
-          title: `${this.quantity(this.totalReceived)} ${this.$t("received")}`,
-          description: `${this.quantity(this.activeItems.length)} ${this.$t("items")}`,
-          date: this.formatDateTime(this.order.orderDate)
-        },
-        {
-          key: 'arrival',
-          icon: calendarOutline,
-          title: this.$t("Arrival date") as string,
-          description: this.formatDate(this.arrivalDateValue),
-          date: this.quantity(this.totalAvailable)
+      const timeline = JSON.parse(JSON.stringify(this.rawTimeline));
+
+      // Add receipts grouped by datetimeReceived
+      const receipts = this.receipts || {};
+      Object.keys(receipts).forEach((datetimeReceived: any) => {
+        const receiptGroup = receipts[datetimeReceived];
+        timeline.push({
+          statusDatetime: Number(datetimeReceived),
+          eventType: 'RECEIPT',
+          statusDesc: this.$t('Receipt'),
+          items: receiptGroup,
+          receivedByUserLoginId: receiptGroup[0]?.receivedByUserLoginId
+        });
+      });
+
+      // Group item cancellations by 1-minute window
+      const processedTimeline = [] as any[];
+      const groupedCancellations = [] as any[];
+
+      timeline.forEach((event: any) => {
+        if (event.orderItemSeqId && event.statusId === 'ITEM_CANCELLED') {
+          const time = event.statusDatetime;
+          let groupFound = false;
+          for (const group of groupedCancellations) {
+            if (Math.abs(time - group[0].statusDatetime) <= 60000) {
+              group.push(event);
+              groupFound = true;
+              break;
+            }
+          }
+          if (!groupFound) groupedCancellations.push([event]);
+        } else {
+          processedTimeline.push(event);
         }
-      ];
+      });
+
+      groupedCancellations.forEach((groupedEvents: any[]) => {
+        const timestamp = groupedEvents[0].statusDatetime;
+        if (groupedEvents.length > 1) {
+          const items = groupedEvents.map((event: any) => {
+            const item = this.enrichedItems.find((i: any) => i.orderItemSeqId === event.orderItemSeqId);
+            return {
+              ...event,
+              productId: item?.productId,
+              productName: item?.productName || item?.productId || event.orderItemSeqId,
+              statusUserLogin: event.statusUserLogin
+            };
+          });
+          processedTimeline.push({
+            statusDatetime: timestamp,
+            statusId: 'GROUPED_CANCELLATIONS',
+            statusDesc: `${groupedEvents.length} ${this.$t('items cancelled')}`,
+            items,
+            eventType: 'CANCELLATION'
+          });
+        } else {
+          const event = groupedEvents[0];
+          const item = this.enrichedItems.find((i: any) => i.orderItemSeqId === event.orderItemSeqId);
+          const productName = item?.productName || item?.productId || event.orderItemSeqId;
+          processedTimeline.push({
+            ...event,
+            statusDesc: `${this.$t('Cancelled')}: ${productName}`,
+            eventType: 'CANCELLATION',
+            items: [{ ...event, productId: item?.productId, productName, statusUserLogin: event.statusUserLogin }]
+          });
+        }
+      });
+
+      // Resolve statusDesc for events that only carry statusId
+      processedTimeline.forEach((event: any) => {
+        if (!event.statusDesc && event.statusId) {
+          event.statusDesc = this.getStatusDesc(event.statusId);
+        }
+      });
+
+      // Sort chronologically
+      processedTimeline.sort((a: any, b: any) => (a.statusDatetime || 0) - (b.statusDatetime || 0));
+
+      // Calculate time diffs between consecutive events
+      processedTimeline.forEach((event: any, index: number) => {
+        if (index > 0 && event.statusDatetime) {
+          const prev = processedTimeline[index - 1];
+          if (prev.statusDatetime) event.timeDiff = this.findTimeDiff(prev.statusDatetime, event.statusDatetime);
+        }
+      });
+
+      return processedTimeline;
     },
     activeItems(): any[] {
       return this.items.filter((item: any) => item.itemStatusId !== 'ITEM_CANCELLED');
@@ -571,6 +642,12 @@ export default defineComponent({
     totalReceived(): number {
       return this.activeItems.reduce((total: number, item: any) => total + this.toNumber(this.receivedQuantity(item)), 0);
     },
+    isOrderLocked(): boolean {
+      return ['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(this.order.statusId);
+    },
+    receivingAppUrl(): string {
+      return process.env.VUE_APP_RECEIVING_LOGIN_URL || '';
+    },
     variantCount(): number {
       const productKeys = new Set(this.items.map((item: any) => item.productId || item.sku || item.orderItemSeqId).filter(Boolean));
       return productKeys.size || this.items.length;
@@ -581,8 +658,41 @@ export default defineComponent({
   },
   methods: {
     async load() {
+      this.store.dispatch('util/getOrderStatusDesc');
       await this.store.dispatch('purchaseOrder/fetchPurchaseOrder', { orderId: this.orderId });
       this.store.dispatch('purchaseOrder/fetchAllocations', { orderId: this.orderId, allocationView: 'linked' });
+      this.fetchOrderTimeline();
+      this.store.dispatch('purchaseOrder/fetchReceipts', { orderId: this.orderId });
+    },
+    async fetchOrderTimeline() {
+      this.isFetchingTimeline = true;
+      try {
+        const statusHistory = await this.store.dispatch('purchaseOrder/fetchOrderStatusHistory', { orderId: this.orderId });
+        this.rawTimeline = (statusHistory || []).filter((s: any) => !s.orderItemSeqId || s.statusId === 'ITEM_CANCELLED');
+      } catch (error) {
+        console.error('Failed to fetch order timeline', error);
+        this.rawTimeline = [];
+      } finally {
+        this.isFetchingTimeline = false;
+      }
+    },
+    findTimeDiff(startTime: any, endTime: any): string {
+      if (!startTime || !endTime) return '';
+      const diff = DateTime.fromMillis(endTime).diff(DateTime.fromMillis(startTime), ['years', 'months', 'days', 'hours', 'minutes']);
+      let result = '+ ';
+      if (diff.years) result += `${Math.round(diff.years)} years `;
+      if (diff.months) result += `${Math.round(diff.months)} months `;
+      if (diff.days) result += `${Math.round(diff.days)} days `;
+      if (diff.hours) result += `${Math.round(diff.hours)} hours `;
+      if (diff.minutes) result += `${Math.round(diff.minutes)} minutes `;
+      return result.trim() !== '+' ? result.trim().toUpperCase() : '';
+    },
+    redirectToReceivingApp() {
+      const omsUrl = this.store.getters['user/getBaseUrl'].replace(/\/api\/?$/, '/')
+      const token = this.store.getters['user/getUserToken']
+      const maargeUrl = this.store.getters['user/getMaargeInstanceUrl']
+      const expirationTime = useAuthStore().token.expiration
+      window.location.href = `${process.env.VUE_APP_RECEIVING_LOGIN_URL}?oms=${omsUrl}&token=${token}&expirationTime=${expirationTime}&orderId=${this.orderId}&facilityId=${this.defaultFacilityId}&omsRedirectionUrl=${maargeUrl}`
     },
     allocationLabel(count: any) {
       const numericCount = this.toNumber(count);
@@ -654,12 +764,6 @@ export default defineComponent({
       const item = this.activeItem;
       this.closeItemActions();
       await this.updateItem(item);
-    },
-    expandReceiveRows() {
-      this.showReceiveControls = !this.showReceiveControls;
-    },
-    setReceiveDraft(key: string, value: any) {
-      this.receiveDraft = { ...this.receiveDraft, [key]: value };
     },
     firstDistinct(...values: any[]) {
       const uniqueValues = values.filter((value) => value !== undefined && value !== null && value !== '');
@@ -851,21 +955,6 @@ export default defineComponent({
         statusId: 'ITEM_COMPLETED'
       });
     },
-    async receiveItem(item: any) {
-      const draftKey = this.itemDraftKey(item);
-      const quantityAccepted = Number(this.receiveDraft[draftKey] || 0);
-      if (!quantityAccepted) return;
-      await this.store.dispatch('purchaseOrder/receiveItems', {
-        orderId: this.orderId,
-        facilityId: this.defaultFacilityId,
-        items: [{
-          orderItemSeqId: item.orderItemSeqId,
-          productId: item.productId,
-          quantityAccepted
-        }]
-      });
-      this.receiveDraft[draftKey] = '';
-    },
     async saveArrivalDate() {
       if (!this.arrivalDateDraft || !this.arrivalDateItem.orderItemSeqId) {
         this.closeArrivalDatePicker();
@@ -976,6 +1065,7 @@ export default defineComponent({
       ellipsisVerticalOutline,
       fitnessOutline,
       gitMergeOutline,
+      openOutline,
       orderId: route.params.orderId as string,
       refreshOutline,
       router,

@@ -381,9 +381,36 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     }
   },
 
-  async fetchReceipts ({ commit }) {
-    commit(types.PURCHASE_ORDER_RECEIPTS_UPDATED, { receipts: [] })
-    return ok({ receipts: [] })
+  async fetchReceipts ({ commit }, { orderId }) {
+    try {
+      const resp = await PurchaseOrderService.fetchPurchaseOrderReceipts(orderId)
+      if (hasError(resp)) throw resp.data
+
+      // Group receipts by datetimeReceived (same shape as Transfer Order)
+      const grouped = (Array.isArray(resp.data) ? resp.data : [])
+        .reduce((acc: any, receipt: any) => {
+          const key = receipt.datetimeReceived
+          if (!acc[key]) acc[key] = []
+          acc[key].push(receipt)
+          return acc
+        }, {})
+
+      commit(types.PURCHASE_ORDER_RECEIPTS_UPDATED, { receipts: grouped })
+    } catch (error) {
+      console.error(error)
+      commit(types.PURCHASE_ORDER_RECEIPTS_UPDATED, { receipts: {} })
+    }
+  },
+
+  async fetchOrderStatusHistory (_, { orderId, pageSize = '250' }) {
+    try {
+      const resp = await PurchaseOrderService.fetchOrderStatusHistory(orderId, { pageSize })
+      if (hasError(resp)) throw resp.data
+      return resp.data || []
+    } catch (error) {
+      console.error(error)
+      return []
+    }
   },
 
   async fetchContactMechs ({ commit }) {
