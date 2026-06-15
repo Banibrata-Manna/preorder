@@ -41,13 +41,10 @@
           <ion-item lines="full">
             <ion-label>
               <h1><strong>{{ allocation.orderName || allocation.orderId }}</strong></h1>
-              <p>{{ allocation.orderId }}</p>
+              <p>{{ allocation.orderId }} &nbsp;·&nbsp; {{ $t("Created on") }} {{ formatDate(allocation.orderDate) }}</p>
             </ion-label>
           </ion-item>
-          <div class="metadata ion-padding-end">
-            <ion-note>{{ $t("Created on") }} {{ formatDate(allocation.orderDate) }}</ion-note>
-            <ion-badge :color="orderStatusColor(allocation)">{{ allocation.orderStatusId }}</ion-badge>
-          </div>
+          <ion-badge :color="orderStatusColor(allocation)" class="ion-padding-end">{{ getStatusDesc(allocation.orderStatusId) || allocation.orderStatusId }}</ion-badge>
         </div>
 
         <!-- Item row -->
@@ -71,17 +68,23 @@
             </ion-label>
           </div>
           <div class="tablet ion-text-center">
-            <ion-button v-if="allocation.allocationType === 'Linked'" fill="clear" @click="unlinkAllocation(allocation)">
-              <ion-icon slot="start" :icon="linkOutline" />
-              {{ $t("Unlink") }}
-            </ion-button>
+            <template v-if="allocation.allocationType === 'Linked'">
+              <ion-button fill="clear" color="primary" :disabled="!poItem(allocation)" @click="syncAllocationEdd(allocation)">
+                <ion-icon slot="start" :icon="syncOutline" />
+                {{ $t("Sync") }}
+              </ion-button>
+              <ion-button fill="clear" @click="unlinkAllocation(allocation)">
+                <ion-icon slot="start" :icon="linkOutline" />
+                {{ $t("Unlink") }}
+              </ion-button>
+            </template>
             <ion-button v-else fill="clear" color="primary" @click="linkAllocation(allocation)">
               <ion-icon slot="start" :icon="linkOutline" />
               {{ $t("Link") }}
             </ion-button>
           </div>
           <div class="ion-text-center ion-padding-end">
-            <ion-badge :color="itemStatusColor(allocation)">{{ allocation.itemStatusId }}</ion-badge>
+            <ion-badge :color="itemStatusColor(allocation)">{{ getStatusDesc(allocation.itemStatusId) || allocation.itemStatusId }}</ion-badge>
           </div>
         </div>
       </template>
@@ -108,10 +111,9 @@ import {
   IonSegmentButton,
   IonThumbnail,
   IonTitle,
-  IonText,
   IonToolbar
 } from "@ionic/vue";
-import { businessOutline, calendarOutline, linkOutline } from "ionicons/icons";
+import { businessOutline, calendarOutline, linkOutline, syncOutline } from "ionicons/icons";
 import { DateTime } from "luxon";
 import { defineComponent } from "vue";
 import { mapGetters } from "vuex";
@@ -147,7 +149,9 @@ export default defineComponent({
       allocations: 'purchaseOrder/getAllocations',
       allocationView: 'purchaseOrder/getAllocationView',
       selected: 'purchaseOrder/getSelectedAllocations',
-      getProduct: 'product/getProduct'
+      getProduct: 'product/getProduct',
+      currentOrder: 'purchaseOrder/getCurrent',
+      getStatusDesc: 'util/getStatusDesc'
     }),
     requestedAllocationView(): string {
       const queryValue = this.queryValue(this.route.query.allocationView);
@@ -158,6 +162,7 @@ export default defineComponent({
     }
   },
   ionViewWillEnter() {
+    this.store.dispatch('util/getOrderStatusDesc');
     this.fetchAllocations(this.requestedAllocationView);
   },
   methods: {
@@ -234,6 +239,21 @@ export default defineComponent({
         console.error(error)
       }
     },
+    poItem(allocation: any) {
+      const items: any[] = this.currentOrder?.items || [];
+      return items.find((i: any) => i.productId === allocation.productId);
+    },
+    async syncAllocationEdd(allocation: any) {
+      const poItem = this.poItem(allocation);
+      if (!poItem) return;
+      const success = await this.store.dispatch('purchaseOrder/syncItemDeliveryDate', {
+        orderId: this.orderId,
+        orderItemSeqId: poItem.orderItemSeqId,
+        soOrderId: allocation.orderId,
+        soOrderItemSeqId: allocation.orderItemSeqId
+      });
+      if (success !== false) await this.fetchAllocations(this.allocationView);
+    },
     async unlinkAllocation(allocation: any) {
       const alert = await alertController.create({
         header: this.$t("Unlink allocation"),
@@ -269,6 +289,7 @@ export default defineComponent({
       businessOutline,
       calendarOutline,
       linkOutline,
+      syncOutline,
       orderId: route.params.orderId as string,
       productIdentificationPref,
       route,

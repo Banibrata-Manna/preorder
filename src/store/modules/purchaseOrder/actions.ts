@@ -276,6 +276,21 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     }
   },
 
+  async syncItemDeliveryDate (_ctx, { orderId, orderItemSeqId, soOrderId, soOrderItemSeqId }) {
+    try {
+      const resp = await PurchaseOrderService.syncItemDeliveryDate(orderId, orderItemSeqId, soOrderId, soOrderItemSeqId)
+      if (hasError(resp)) throw resp.data
+
+      showToast(translate('EDD synced to linked sales order'))
+      PurchaseOrderService.indexOrder(soOrderId).catch((error: any) => console.error('Failed to index order', error))
+      return true
+    } catch (error) {
+      console.error(error)
+      showToast(translate('Something went wrong'))
+      return false
+    }
+  },
+
   async deleteItem ({ dispatch }, { orderId, orderItemSeqId }) {
     try {
       const resp = await PurchaseOrderService.changeOrderItemStatus(orderId, orderItemSeqId, 'ITEM_CANCELLED')

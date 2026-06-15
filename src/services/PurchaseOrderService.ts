@@ -210,6 +210,19 @@ const assignPOItemsToSOItems = async (orderId: string, productId: string, salesO
   });
 }
 
+const syncItemDeliveryDate = async (orderId: string, orderItemSeqId: string, soOrderId: string, soOrderItemSeqId: string): Promise<any> => {
+  return client({
+    baseURL: store.getters['user/getMaargeBaseUrl'],
+    url: `oms/purchaseOrders/${orderId}/items/${orderItemSeqId}/syncDeliveryDate`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${store.getters['user/getUserToken']}`
+    },
+    data: { soOrderId, soOrderItemSeqId }
+  });
+}
+
 export const PurchaseOrderService = {
   fetchPurchaseOrders,
   fetchPurchaseOrder,
@@ -227,5 +240,6 @@ export const PurchaseOrderService = {
   deletePOAllocation,
   assignPOItemsToSOItems,
   indexOrder,
-  fetchOrderStatusHistory
+  fetchOrderStatusHistory,
+  syncItemDeliveryDate
 }

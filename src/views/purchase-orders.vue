@@ -104,13 +104,10 @@
               <ion-item lines="none">
                 <ion-label>
                   <h2>{{ orderTitle(group) }}</h2>
-                  <p>{{ orderSubtitle(group) }}</p>
+                  <p>{{ orderSubtitle(group) }} &nbsp;·&nbsp; {{ $t("Created on") }} {{ formatDate(createdValue(group)) }}</p>
                 </ion-label>
               </ion-item>
-              <div class="metadata ion-padding-end">
-                <ion-note>{{ $t("Created on") }} {{ formatDate(createdValue(group)) }}</ion-note>
-                <ion-badge :color="statusColor(group)">{{ statusLabel(group) }}</ion-badge>
-              </div>
+              <ion-badge :color="statusColor(group)" class="ion-padding-end">{{ statusLabel(group) }}</ion-badge>
             </div>
 
             <template v-if="groupBy === 'ORDER_ITEM'">
@@ -281,7 +278,7 @@
                   <ion-item lines="none">
                     <ion-label>
                       <h2>{{ orderTitle(item) }}</h2>
-                      <p>{{ orderSubtitle(item) }}</p>
+                      <p>{{ orderSubtitle(item) }} &nbsp;·&nbsp; {{ $t("Created on") }} {{ formatDate(createdValue(item)) }}</p>
                     </ion-label>
                   </ion-item>
                   <div v-if="!aggregateShowsArrival" class="tablet ion-text-center">
@@ -302,10 +299,7 @@
                       <p>{{ $t("available") }}</p>
                     </ion-label>
                   </div>
-                  <div class="metadata ion-padding-end">
-                    <ion-note>{{ $t("Created on") }} {{ formatDate(createdValue(item)) }}</ion-note>
-                    <ion-badge :color="statusColor(item)">{{ statusLabel(item) }}</ion-badge>
-                  </div>
+                  <ion-badge :color="statusColor(item)" class="ion-padding-end">{{ statusLabel(item) }}</ion-badge>
                 </template>
               </div>
             </ion-list>
