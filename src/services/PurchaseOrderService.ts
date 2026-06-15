@@ -210,16 +210,16 @@ const assignPOItemsToSOItems = async (orderId: string, productId: string, salesO
   });
 }
 
-const syncItemDeliveryDate = async (orderId: string, orderItemSeqId: string, soOrderId: string, soOrderItemSeqId: string): Promise<any> => {
+const syncItemDeliveryDate = async (soOrderId: string, soOrderItemSeqId: string, promisedDatetime: number): Promise<any> => {
   return client({
     baseURL: store.getters['user/getMaargeBaseUrl'],
-    url: `oms/purchaseOrders/${orderId}/items/${orderItemSeqId}/syncDeliveryDate`,
-    method: 'POST',
+    url: `oms/orders/${soOrderId}/items/${soOrderItemSeqId}`,
+    method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${store.getters['user/getUserToken']}`
     },
-    data: { soOrderId, soOrderItemSeqId }
+    data: { promisedDatetime }
   });
 }
 

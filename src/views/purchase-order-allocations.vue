@@ -61,7 +61,7 @@
           <div class="tablet ion-text-center">
             <ion-chip outline>
               <ion-icon :icon="allocation.allocationType === 'Linked' ? calendarOutline : businessOutline" />
-              <ion-label>{{ allocation.allocationType === 'Linked' ? formatDate(allocation.promisedDatetime) : allocation.facilityId }}</ion-label>
+              <ion-label>{{ allocation.allocationType === 'Linked' ? formatDate(allocation.promisedDatetime) : (virtualFacilities[allocation.facilityId] || allocation.facilityId) }}</ion-label>
             </ion-chip>
             <ion-label>
               <p>{{ allocation.allocationType === 'Linked' ? $t("promise date") : $t("parking") }}</p>
@@ -151,7 +151,8 @@ export default defineComponent({
       selected: 'purchaseOrder/getSelectedAllocations',
       getProduct: 'product/getProduct',
       currentOrder: 'purchaseOrder/getCurrent',
-      getStatusDesc: 'util/getStatusDesc'
+      getStatusDesc: 'util/getStatusDesc',
+      virtualFacilities: 'user/getVirtualFacilities'
     }),
     requestedAllocationView(): string {
       const queryValue = this.queryValue(this.route.query.allocationView);
@@ -245,12 +246,11 @@ export default defineComponent({
     },
     async syncAllocationEdd(allocation: any) {
       const poItem = this.poItem(allocation);
-      if (!poItem) return;
+      if (!poItem?.estimatedDeliveryDate) return;
       const success = await this.store.dispatch('purchaseOrder/syncItemDeliveryDate', {
-        orderId: this.orderId,
-        orderItemSeqId: poItem.orderItemSeqId,
         soOrderId: allocation.orderId,
-        soOrderItemSeqId: allocation.orderItemSeqId
+        soOrderItemSeqId: allocation.orderItemSeqId,
+        estimatedDeliveryDate: poItem.estimatedDeliveryDate
       });
       if (success !== false) await this.fetchAllocations(this.allocationView);
     },

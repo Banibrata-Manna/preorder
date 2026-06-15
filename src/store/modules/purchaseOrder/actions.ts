@@ -7,6 +7,7 @@ import * as types from './mutation-types'
 import emitter from '@/event-bus'
 import { PurchaseOrderService } from '@/services/PurchaseOrderService'
 import { purchaseOrderFixtures } from './mockData'
+import { DateTime } from 'luxon'
 
 const fixtureAllocations = purchaseOrderFixtures.allocations
 
@@ -276,9 +277,12 @@ const actions: ActionTree<PurchaseOrderState, RootState> = {
     }
   },
 
-  async syncItemDeliveryDate (_ctx, { orderId, orderItemSeqId, soOrderId, soOrderItemSeqId }) {
+  async syncItemDeliveryDate (_ctx, { soOrderId, soOrderItemSeqId, estimatedDeliveryDate }) {
     try {
-      const resp = await PurchaseOrderService.syncItemDeliveryDate(orderId, orderItemSeqId, soOrderId, soOrderItemSeqId)
+      const promisedDatetime = typeof estimatedDeliveryDate === 'number' || /^\d+$/.test(String(estimatedDeliveryDate))
+        ? Number(estimatedDeliveryDate)
+        : DateTime.fromSQL(String(estimatedDeliveryDate)).toMillis()
+      const resp = await PurchaseOrderService.syncItemDeliveryDate(soOrderId, soOrderItemSeqId, promisedDatetime)
       if (hasError(resp)) throw resp.data
 
       showToast(translate('EDD synced to linked sales order'))
